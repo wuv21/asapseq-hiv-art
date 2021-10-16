@@ -1,0 +1,374 @@
+---
+title: "postHPC"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+suppressMessages(library(ArchR))
+suppressMessages(library(GenomicFeatures))
+suppressMessages(library(rtracklayer))
+library(patchwork)
+library(pheatmap)
+library(UpSetR)
+library(Seurat)
+library(glue)
+
+source("common_scripts/graphs.R")
+```
+
+```{r}
+addArchRThreads(threads = 2)
+```
+
+```{r}
+proj <- loadArchRProject(path = "A08A01_qcfilt/", force = FALSE)
+
+# filter cells that are in small clusters
+clusterSize <- table(proj$Clusters) / length(proj$cellNames) * 100
+clusterSizeFilt <- clusterSize >= 0.5
+
+idxClusterPass <- BiocGenerics::which(clusterSizeFilt[proj$Clusters])
+cellsClusterPass <- proj$cellNames[idxClusterPass]
+proj_clustFilt <- proj[cellsClusterPass, ]
+
+# add haystack data
+# pairings
+uniqSamples <- unique(proj$Sample)
+haystackSamplePairing <- sapply(uniqSamples, function(i) {
+  newSampleName <- ifelse(grepl("A01", i), paste0(i, "_v3WithEnv"), paste0(i, "_v3"))
+  return(newSampleName)
+})
+
+haystackList <- lapply(haystackSamplePairing, function(i) {
+  df <- read.csv(glue("data/hiv-haystack/{i}/viralFrags.tsv"), header = TRUE, sep = "\t")
+  return(df)
+})
+names(haystackList) <- names(haystackSamplePairing)
+
+haystackDf <- bind_rows(haystackList, .id = "sample")
+haystackDf <- haystackDf %>%
+  mutate(newCbc = paste0(sample, "#", cbc))
+
+haystackPosCells <- haystackDf %>%
+  group_by(sample, newCbc) %>%
+  summarize(totalFrags = n())
+
+matchedHaystackArchRCells <- intersect(haystackPosCells$newCbc, proj_clustFilt$cellNames)
+
+haystackOut <- rep(FALSE, length(proj_clustFilt$cellNames))
+names(haystackOut) <- proj_clustFilt$cellNames
+haystackOut[matchedHaystackArchRCells] <- TRUE
+
+proj_clustFilt$haystackOut <- haystackOut
+
+plotDualUmap(proj_clustFilt, fn = "png/unlabeledCluster_dualUmap.png")
+```
+
+```{r}
+proj_clustFilt <- addImputeWeights(proj_clustFilt)
+
+pImpute <- plotEmbedding(
+    ArchRProj = proj_clustFilt, 
+    colorBy = "GeneScoreMatrix", 
+    name = c("TBX21", "SELL", "CCR7", "IL7R", "IL2RA", "CD27", "CD28", "FAS", "CD19"), 
+    embedding = "UMAP",
+    imputeWeights = getImputeWeights(proj_clustFilt)
+)
+
+pImputeGrid <- lapply(pImpute, function(x) {
+    gene <- str_extract(x$labels$title, "(\\S+)$")
+    
+    x +
+      guides(color = FALSE, fill = FALSE) + 
+      theme(plot.margin = unit(c(0, 0, 0, 0), "cm")) +
+      labs(title = gene,
+        x = "UMAP Dim 1",
+        y = "UMAP Dim 2") +
+      theme(
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.title = element_text(size = 12),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"),
+        plot.title.position = "plot"
+      )
+})
+do.call(cowplot::plot_grid, c(list(ncol = 3), pImputeGrid))
+```
+
+```{r}
+tsa_catalog <- readRDS("rds/tsa_catalog.rds")
+load("rds/ART_seuratMerged.RData")
+
+# TODO I renamed seuMerge to adtART
+adtSimilarToIsotype_ART <- tsa_catalog[!tsa_catalog$isCtrl, ] %>%
+  mutate(similarToControl = rowSums(isoComparisonsART[,c(2:10)] > 0.05)) %>%
+  dplyr::select(DNA_ID, cleanDescriptionFull, similarToControl) %>%
+  dplyr::filter(similarToControl > 4)
+
+adtToUse <- rownames(seuMerge_matched)[!tsa_catalog$isCtrl & !(rownames(seuMerge_matched) %in% adtSimilarToIsotype$DNA_ID)]
+```
+
+
+```{r}
+# make final dataset that contains both modalities
+intersectCbc <- intersect(Cells(seuMerge), proj_clustFilt$cellNames)
+proj_clustFilt_matched <- proj_clustFilt[intersectCbc, ]
+seuMerge_matched <- subset(seuMerge, cells = intersectCbc)
+
+plotDualUmap(proj_clustFilt_matched, fn = "png/byIndividual_dualUmap_matched.png", cluster = "individual")
+plotDualUmap(proj_clustFilt_matched, fn = "png/unlabeledCluster_dualUmap_matched.png")
+```
+
+```{r}
+seuMerge_matched$atacClusters <- proj_clustFilt_matched$Clusters
+
+Idents(seuMerge_matched) <- "atacClusters"
+clusterMarkers <- FindAllMarkers(seuMerge_matched,
+  assay = "tsa",
+  slot = "data",
+  features = adtToUse)
+
+clusterMarkersFilt <- clusterMarkers %>%
+  left_join(tsa_catalog %>% dplyr::select(DNA_ID, cleanName), by = c("gene" = "DNA_ID")) %>% 
+  filter(p_val_adj < 0.05) %>%
+  group_by(cluster) %>%
+  filter(avg_log2FC > 0) %>%
+  mutate(piScore = avg_log2FC * -log10(p_val_adj)) %>%
+  arrange(desc(piScore), .by_group = TRUE)
+
+# get base markers to help compare
+baseMarkers <- c(
+  "A0034", #CD3
+  "A0072", #CD4
+  "A0046", #CD8
+  "A0081", #CD14
+  "A0083", #CD16
+  "A0050", #CD19
+  "A0087", #CD45RO
+  "A0063", #CD45RA
+  "A0154", #CD27
+  "A0386", #CD28
+  "A0156", #CD95
+  "A0390", #CD127
+  "A0146", #CD69
+  "A0085", #CD25
+  "A0089", #TIGIT
+  "A0088" #PD1
+)
+
+baseRidgePlot <- RidgePlot(seuMerge_matched,
+  features = baseMarkers,
+  group.by = "atacClusters",
+  combine = FALSE)
+
+baseRidgePlotGrid <- lapply(baseRidgePlot, function(x) {
+  tsaID <- x$labels$title
+  tsaCDName <- tsa_catalog[tsa_catalog$DNA_ID == tsaID, "cleanName"]
+  
+  x +
+    guides(color = "none", fill = "none") +
+    labs(title = glue("{tsaCDName} ({tsaID})")) +
+    theme(axis.title = element_blank(),
+      axis.text = element_text(size = 6),
+      panel.grid.major.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      plot.title.position = "plot",
+      plot.title = element_text(size = 8))
+})
+
+cowplot::save_plot(filename = "png/basePanelGrid.png",
+  plot = do.call(cowplot::plot_grid, c(list(ncol = 5), baseRidgePlotGrid)),
+  base_height = 7,
+  base_width = 10,
+  bg = "#ffffff",
+  dpi = "retina")
+```
+
+
+```{r}
+clusterCustomAnnots <- c(
+  "C9" = "Other (platelet)",
+  "C5" = "Other (mono)",
+  "C22" = "Early memory #1",
+  "C21" = "Early memory #2",
+  "C20" = "Early memory #3",
+  "C19" = "Reg",
+  "C16" = "Other (pDC)",
+  "C15" = "EM/Effector #1",
+  "C14" = "EM/Effector #2",
+  "C13" = "EM/Effector #3",
+  "C10" = "EM/Effector #4"
+)
+
+proj_clustFilt_matched <- addCellColData(ArchRProj = proj_clustFilt_matched,
+  data = clusterCustomAnnots[proj_clustFilt_matched$Clusters],
+  cells = proj_clustFilt_matched$cellNames,
+  name = "annotClusters",
+  force = TRUE)
+
+seuMerge_matched$annotClusters <- proj_clustFilt_matched$annotClusters
+
+
+plotDualUmap(proj_clustFilt_matched,
+  fn = "png/labeledCluster_dualUmap_matched.png",
+  cluster = "annotClusters")
+```
+
+
+
+```{r}
+# remove other cells
+# idxClusterPass <- BiocGenerics::which(!projHighTSSLSI_fragFilt_clustFilt$annotClusters %in% c("Other (mono/etc)", "Other (platelets)"))
+# cellsClusterPass <- projHighTSSLSI_fragFilt_clustFilt$cellNames[idxClusterPass]
+# projCleaned <- projHighTSSLSI_fragFilt_clustFilt[cellsClusterPass, ]
+# 
+# projCleanedUmapDF <- data.frame(x = projCleaned@embeddings$UMAP$df$`Harmony#UMAP_Dimension_1`,
+#   y = projCleaned@embeddings$UMAP$df$`Harmony#UMAP_Dimension_2`,
+#   Clusters = projCleaned$annotClusters,
+#   hivPosMatched = projCleaned$hivPos)
+```
+
+
+```{r}
+plotDiscreteBar(proj_clustFilt_matched, "png/discreteProportion_matched.png",
+  cluster = "annotClusters",
+  graphType = "proportion")
+
+plotDiscreteBar(proj_clustFilt_matched, "png/discreteAbsolute_matched.png",
+  cluster = "annotClusters",
+  graphType = "absolute")
+```
+
+```{r}
+seuMerge_matched$haystackOut <- proj_clustFilt_matched$haystackOut
+Idents(seuMerge_matched) <- "haystackOut"
+hivPosMarkers <- FindAllMarkers(seuMerge_matched,
+  assay = "tsa",
+  slot = "data",
+  test.use = "DESeq2",
+  features = adtToUse)
+
+filteredHivPosMarkers <- hivPosMarkers %>%
+  left_join(tsa_catalog %>% dplyr::select(DNA_ID, cleanName), by = c("gene" = "DNA_ID")) %>% 
+  filter(p_val_adj < 0.05) %>%
+  group_by(cluster) %>%
+  filter(avg_log2FC > 0) %>% 
+  mutate(piScore = avg_log2FC * -log10(p_val_adj)) %>%
+  arrange(desc(piScore), .by_group = TRUE)
+
+clean_VlnPlot <- function(gList, finalplotCol = 5, newTitle = c()) {
+  g_grob <- lapply(seq_along(gList), function(i) {
+    x <- gList[[i]]
+    x <- x +
+      theme(axis.title = element_blank(),
+            legend.position = "none")
+    
+    if (length(newTitle) > 0) {
+      x <- x +
+        labs(title = newTitle[i]) +
+        theme(plot.title = element_text(size = 10))
+    }
+    
+    x <- ggplot_build(x)
+    x$data[[2]]$colour <- "#00000020"
+    x$data[[2]]$size <- 0.2
+    
+    return(ggplot_gtable(x))
+  })
+  
+  return(gridExtra::grid.arrange(grobs = g_grob, ncol = finalplotCol))
+}
+
+clean_VlnPlot(VlnPlot(seuMerge_matched, features = filteredHivPosMarkers$gene, combine = FALSE),
+  newTitle = filteredHivPosMarkers$cleanName,
+  finalplotCol = 4)
+
+pSapPi <- filteredHivPosMarkers %>%
+  mutate(cleanName = factor(cleanName, levels = rev(cleanName)),
+    Status = ifelse(cluster == "FALSE", "HIV-", "HIV+")) %>%
+  {ggplot(., aes(x = piScore, y = cleanName, color = Status)) +
+    geom_point(size = 3) + 
+    geom_segment(aes(x = 0, xend = piScore, y = cleanName, yend = cleanName), linetype = "dotted") +
+    labs(y = "Surface marker",
+      x = "π score (log2FC * -log10(adj pval))") +
+    scale_x_continuous(expand = c(0, 0), limits = c(0, max(.$piScore + 0.3))) +
+    theme_classic() +
+    theme(axis.text.y = element_text(size = 6.5),
+      legend.position = "none",
+      strip.placement = "outside") +
+    scale_color_manual(values = c("#999999", "#e63946")) +
+    facet_grid(Status ~ ., scales = "free", space = "free")} 
+
+ggsave("png/hiv_pos_enriched_markers_piScore.png", pSapPi, width = 3, height = 2, dpi = "retina")
+
+rm(pSapPi)
+```
+
+```{r}
+# save archr project
+projCleaned <- saveArchRProject(ArchRProj = proj_clustFilt_matched,
+  outputDirectory = "projCleaned_final",
+  load = TRUE,
+  threads = 2)
+```
+
+```{r}
+# add peaks!
+# run outside of rmd chunk
+proj_clustFilt_matched <- addGroupCoverages(ArchRProj = proj_clustFilt_matched,
+  groupBy = "haystackOut",
+  minCells = 150, # adjustment needed
+  minReplicates = 5,
+  force = TRUE)
+
+# projCleaned <- addGroupCoverages(ArchRProj = projCleaned,
+#   groupBy = "annotClusters",
+#   force = TRUE)
+
+# run outside of rmd chunk
+proj_clustFilt_matched <- addReproduciblePeakSet(
+  ArchRProj = proj_clustFilt_matched, 
+  groupBy = "haystackOut", 
+  pathToMacs2 = "/Users/vince/anaconda3/envs/asapseq/bin/macs2",
+  force = TRUE
+)
+
+# run outside of rmd chunk
+proj_clustFilt_matched <- addPeakMatrix(proj_clustFilt_matched, force = TRUE)
+
+# run outside of rmd chunk
+markersPeaks <- getMarkerFeatures(
+  ArchRProj = proj_clustFilt_matched, 
+  useMatrix = "PeakMatrix", 
+  groupBy = "haystackOut",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  testMethod = "wilcoxon",
+  useGroups = "TRUE",
+  bgdGroups = "FALSE"
+)
+
+plotMarkers(seMarker = markersPeaks, name = "TRUE", cutOff = "FDR <= 0.1 & abs(Log2FC) >= 0.5", plotAs = "Volcano")
+
+if ("Motif" %ni% names(proj_clustFilt_matched@peakAnnotation)){
+    proj_clustFilt_matched <- addMotifAnnotations(ArchRProj = proj_clustFilt_matched, motifSet = "cisbp", name = "Motif")
+}
+proj_clustFilt_matched <- addBgdPeaks(proj_clustFilt_matched)
+
+# takes forever to run...
+# proj_clustFilt_matched <- addDeviationsMatrix(
+#   ArchRProj = proj_clustFilt_matched, 
+#   peakAnnotation = "Motif",
+#   force = TRUE
+# )
+```

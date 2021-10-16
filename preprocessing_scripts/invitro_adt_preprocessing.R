@@ -1,0 +1,36 @@
+suppressMessages(library(Seurat))
+suppressMessages(library(DropletUtils))
+suppressMessages(library(tidyverse))
+suppressMessages(library(glue))
+source("adt_preprocessing_general.R")
+
+samples <- c("ND497_B")
+
+tsa_catalog <- readRDS("../rds/tsa_catalog.rds")
+
+seuListFn <-"../rds/invitro_seuratList.rds"
+if (!file.exists(seuListFn)) {
+  seuList <- createSeuList(samples = samples, adtDir = "../data/adt", filename = seuListFn)
+} else {
+  seuList <- readRDS(file = seuListFn)
+}
+
+adtInVitro <- seuList[[1]]
+adtInVitro <- RenameCells(adtInVitro, new.names = gsub("#_", "#", paste0(Cells(adtInVitro), "-1")))
+
+isoControls <- tsa_catalog[tsa_catalog$isCtrl, ]
+nonIsoControls <- tsa_catalog[!tsa_catalog$isCtrl, ]
+
+isoComparisonsInvitro <- lapply(nonIsoControls$DNA_ID, function(nonIsoId) {
+  comps <- sapply(isoControls$DNA_ID, function(isoID) {
+    nonIsoCounts <- adtInVitro@assays$tsa@data[nonIsoId, ]
+    isoCounts <- adtInVitro@assays$tsa@data[isoID, ]
+    
+    return(wilcox.test(nonIsoCounts, isoCounts, alternative = "greater")$p.value)
+  })
+  
+  names(comps) <- isoControls$DNA_ID
+  return(comps)
+})
+
+save(isoComparisonsInvitro, adtInVitro, file = "../rds/invitro_seuratMerged.RData")
