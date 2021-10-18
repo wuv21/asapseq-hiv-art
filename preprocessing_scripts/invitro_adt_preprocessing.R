@@ -16,7 +16,9 @@ if (!file.exists(seuListFn)) {
 }
 
 adtInVitro <- seuList[[1]]
-adtInVitro <- RenameCells(adtInVitro, new.names = gsub("#_", "#", paste0(Cells(adtInVitro), "-1")))
+newCellNames <- paste0("ND497_B#", gsub("#_", "#", paste0(Cells(adtInVitro), "-1")))
+adtInVitro <- RenameCells(adtInVitro,
+  new.names = newCellNames)
 
 isoControls <- tsa_catalog[tsa_catalog$isCtrl, ]
 nonIsoControls <- tsa_catalog[!tsa_catalog$isCtrl, ]
@@ -32,5 +34,8 @@ isoComparisonsInvitro <- lapply(nonIsoControls$DNA_ID, function(nonIsoId) {
   names(comps) <- isoControls$DNA_ID
   return(comps)
 })
+
+isoComparisonsInvitro <- data.frame(bind_rows(isoComparisonsInvitro))
+rownames(isoComparisonsInvitro) <- nonIsoControls$DNA_ID
 
 save(isoComparisonsInvitro, adtInVitro, file = "../rds/invitro_seuratMerged.RData")

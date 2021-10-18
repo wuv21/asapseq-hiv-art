@@ -4,40 +4,40 @@ suppressMessages(library(tidyverse))
 suppressMessages(library(glue))
 source("adt_preprocessing_general.R")
 
-samples <- c("A01_1", "A01_2", "A01_3", "A01_4", "A08_1", "A08_2", "A08_4")
+samples <- c("C01_1", "C01_2", "C01_3")
 
 tsa_catalog <- readRDS("../rds/tsa_catalog.rds")
 
-seuListFn <-"../rds/ART_seuratList.rds"
+seuListFn <-"../rds/chronic_seuratList.rds"
 if (!file.exists(seuListFn)) {
   seuList <- createSeuList(samples = samples, adtDir = "../data/adt", filename = seuListFn)
 } else {
   seuList <- readRDS(file = seuListFn)
 }
 
-adtART <- merge(x = seuList[[1]],
+adtChronic <- merge(x = seuList[[1]],
   y = seuList[2:length(seuList)],
   add.cell.ids = paste0(samples, "#"),
   merge.data = TRUE)
 
-adtART <- NormalizeData(adtART, normalization.method = "CLR", scale.factor = 10000, margin = 2)
-adtART <- ScaleData(adtART) %>%
-  RunPCA(features = rownames(adtART@assays$tsa))
+adtChronic <- NormalizeData(adtChronic, normalization.method = "CLR", scale.factor = 10000, margin = 2)
+adtChronic <- ScaleData(adtChronic) %>%
+  RunPCA(features = rownames(adtChronic@assays$tsa))
 
-adtART$individual <- str_match(adtART$orig.ident, "A\\d+")[,1]
+adtChronic$individual <- "C01"
 
-adtART <- adtART %>%
+adtChronic <- adtChronic %>%
   harmony::RunHarmony(group.by.vars = "individual", plot_convergence = TRUE)
 
-adtART <- RenameCells(adtART, new.names = gsub("#_", "#", paste0(Cells(adtART), "-1")))
+adtChronic <- RenameCells(adtChronic, new.names = gsub("#_", "#", paste0(Cells(adtChronic), "-1")))
 
 isoControls <- tsa_catalog[tsa_catalog$isCtrl, ]
 nonIsoControls <- tsa_catalog[!tsa_catalog$isCtrl, ]
 
-isoComparisonsART <- lapply(nonIsoControls$DNA_ID, function(nonIsoId) {
+isoComparisonsChronic <- lapply(nonIsoControls$DNA_ID, function(nonIsoId) {
   comps <- sapply(isoControls$DNA_ID, function(isoID) {
-    nonIsoCounts <- adtART@assays$tsa@data[nonIsoId, ]
-    isoCounts <- adtART@assays$tsa@data[isoID, ]
+    nonIsoCounts <- adtChronic@assays$tsa@data[nonIsoId, ]
+    isoCounts <- adtChronic@assays$tsa@data[isoID, ]
     
     return(wilcox.test(nonIsoCounts, isoCounts, alternative = "greater")$p.value)
   })
@@ -46,7 +46,7 @@ isoComparisonsART <- lapply(nonIsoControls$DNA_ID, function(nonIsoId) {
   return(comps)
 })
 
-isoComparisonsART <- data.frame(bind_rows(isoComparisonsART))
-rownames(isoComparisonsART) <- nonIsoControls$DNA_ID
+isoComparisonsChronic <- data.frame(bind_rows(isoComparisonsChronic))
+rownames(isoComparisonsChronic) <- nonIsoControls$DNA_ID
 
-save(isoComparisonsART, adtART, file = "../rds/ART_seuratMerged.RData")
+save(isoComparisonsChronic, adtChronic, file = "../rds/chronic_seuratMerged.RData")

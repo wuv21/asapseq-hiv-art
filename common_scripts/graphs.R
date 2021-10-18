@@ -4,10 +4,13 @@
 generateUmapDfFromArchR <- function(
   proj,
   secondGraphColumn = "haystackOut",
-  cluster = "Clusters") {
+  cluster = "Clusters",
+  embedding = "UMAP") {
   
-  df <- data.frame(x = proj@embeddings$UMAP$df$`Harmony#UMAP_Dimension_1`,
-    y = proj@embeddings$UMAP$df$`Harmony#UMAP_Dimension_2`,
+  umapFromArchr <- getEmbedding(proj, embedding = embedding)
+  
+  df <- data.frame(x = umapFromArchr[, 1],
+    y = umapFromArchr[, 2],
     secondMetadata = getCellColData(proj, select = secondGraphColumn)[, 1],
     sample = proj$Sample,
     cluster = getCellColData(proj, select = cluster)[, 1])
@@ -29,13 +32,20 @@ plotDualUmap <- function(proj,
   fn,
   ggtheme = umapTheme,
   secondGraphColumn = "haystackOut",
-  cluster = "Clusters") {
+  cluster = "Clusters",
+  embedding = "UMAP") {
   
-  df <- generateUmapDfFromArchR(proj, secondGraphColumn = secondGraphColumn, cluster = cluster)
+  df <- generateUmapDfFromArchR(proj,
+    secondGraphColumn = secondGraphColumn, cluster = cluster, embedding = embedding)
   
   clusterLabelUmapPos <- df %>% 
     group_by(cluster) %>% 
-    summarize(x = mean(x), y = mean(y))
+    summarize(medianX = median(x),
+      medianY = median(y),
+      iqrXFactor = IQR(x) / 1.25,
+      iqrYFactor = IQR(y) / 1.25,
+      x = mean(x[x > (medianX - iqrXFactor) & x < (iqrXFactor + medianX)]),
+      y = mean(y[y > (medianY - iqrYFactor) & y < (iqrYFactor + medianY)]))
   
   p1 <- ggplot(df, aes(x = x, y = y)) +
     geom_point(alpha = 0.8, aes(color = cluster), size = 0.5) +
@@ -104,12 +114,12 @@ plotDiscreteBar <- function(proj, fn,
       geom_bar(stat = "identity", width = 0.7, position = position_dodge(0.7)) +
       labs(x = "Cluster",
         y = "Proportion of cluster") +
-      geom_text(aes(y = ifelse(proportion > 0.85, proportion, proportion + 0.07),
-        label = scales::label_percent(accuracy = 0.01)(proportion),
-        color = proviralStatus),
+      geom_text(aes(y = ifelse(proportion > 0.85, proportion, proportion + 0.02),
+        label = scales::label_percent(accuracy = 0.1)(proportion),
+        color = proviralStatus,
+        hjust = ifelse(proportion > 0.85, 1, 0)),
         position = position_dodge(0.7),
         vjust = 0.5,
-        hjust = 1,
         size = 1.5) +
       scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
       ggDiscreteBarTheme    
@@ -133,6 +143,6 @@ plotDiscreteBar <- function(proj, fn,
     
   }
 
-  ggsave(fn, width = 4, height = 2.5, dpi = "retina")
+  ggsave(fn, width = 2.5, height = 2.5, dpi = "retina")
 }
 
