@@ -42,7 +42,7 @@ arrowfile_a01 <- createArrowFiles(inputFiles = fragmentsFN_a01,
 
 combinedArrowFiles <- c(arrowfile_a08, arrowfile_a01)
 initProjDir <- "A08A01_init"
-qcFiltProjDir <- "A08A01_qcfilt"
+qcFiltProjDir <- "A08A01_qcfiltTSS8"
 if (!dir.exists(qcFiltProjDir)) {
   proj <- ArchRProject(
     ArrowFiles = combinedArrowFiles,
@@ -50,7 +50,7 @@ if (!dir.exists(qcFiltProjDir)) {
     copyArrows = TRUE,
     showLogo = FALSE)
 
-  idxPass <- BiocGenerics::which(proj$TSSEnrichment >= 9)
+  idxPass <- BiocGenerics::which(proj$TSSEnrichment >= 8)
   cellsPass <- proj$cellNames[idxPass]
   projQcFilter <- proj[cellsPass, ]
 
@@ -125,35 +125,3 @@ projQcFilter <- saveArchRProject(
   outputDirectory = qcFiltProjDir,
   load = TRUE
 )
-
-p1 <- plotEmbedding(ArchRProj = projQcFilter,
-  colorBy = "cellColData",
-  name = "Sample",
-  embedding = "UMAP"
-)
-
-p2 <- plotEmbedding(ArchRProj = projQcFilter,
-  colorBy = "cellColData",
-  name = "Clusters",
-  embedding = "UMAP"
-)
-
-plotPDF(p1, p2,
-  name = "Plot-UMAP-Clusters.pdf",
-  ArchRProj = projQcFilter,
-  addDOC = FALSE,
-  width = 7,
-  height = 7
-)
-
-# markersGS <- getMarkerFeatures(
-#   ArchRProj = projHighTSSLSI,
-#   useMatrix = "GeneScoreMatrix",
-#   groupBy = "Clusters",
-#   bias = c("TSSEnrichment", "log10(nFrags)"),
-#   testMethod = "wilcoxon"
-# )
-# 
-# saveRDS(markersGS, "rds/projTSSLSI_GS.rds")
-# 
-# 

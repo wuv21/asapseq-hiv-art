@@ -28,7 +28,7 @@ arrowfile_nd497B <- createArrowFiles(inputFiles = fragmentsFN_nd497B,
 
 
 initProjDir <- "ND497_B_init"
-qcFiltProjDir <- "ND497_B_qcfilt"
+qcFiltProjDir <- "ND497_B_qcfiltTSS8"
 if (!dir.exists(qcFiltProjDir)) {
   proj <- ArchRProject(
     ArrowFiles = arrowfile_nd497B,
@@ -36,7 +36,7 @@ if (!dir.exists(qcFiltProjDir)) {
     copyArrows = TRUE,
     showLogo = FALSE)
 
-  idxPass <- BiocGenerics::which(proj$TSSEnrichment >= 9)
+  idxPass <- BiocGenerics::which(proj$TSSEnrichment >= 8)
   cellsPass <- proj$cellNames[idxPass]
   projQcFilter <- proj[cellsPass, ]
 
@@ -100,24 +100,4 @@ projQcFilter <- saveArchRProject(
   ArchRProj = projQcFilter,
   outputDirectory = qcFiltProjDir,
   load = TRUE
-)
-
-p1 <- plotEmbedding(ArchRProj = projQcFilter,
-  colorBy = "cellColData",
-  name = "Sample",
-  embedding = "UMAP"
-)
-
-p2 <- plotEmbedding(ArchRProj = projQcFilter,
-  colorBy = "cellColData",
-  name = "Clusters",
-  embedding = "UMAP"
-)
-
-plotPDF(p1, p2,
-  name = "Plot-UMAP-Clusters.pdf",
-  ArchRProj = projQcFilter,
-  addDOC = FALSE,
-  width = 7,
-  height = 7
 )
