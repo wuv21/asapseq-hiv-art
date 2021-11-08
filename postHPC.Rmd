@@ -220,6 +220,10 @@ plotDiscreteBar(projChronic_matched, "outs/png/chronic_discreteProportion_matche
 plotDiscreteBar(projChronic_matched, "outs/png/chronic_discreteAbsolute_matched.png",
   cluster = "manualClusterAnnot",
   graphType = "absolute")
+
+plotDiscreteBar(projChronic_matched, "outs/png/chronic_discreteHivOnly_matched.png",
+  cluster = "manualClusterAnnot",
+  graphType = "hivOnly")
 ```
 
 
@@ -241,6 +245,10 @@ plotDiscreteBar(projART_matched, "outs/png/art_discreteProportion_matched.png",
 plotDiscreteBar(projART_matched, "outs/png/art_discreteAbsolute_matched.png",
   cluster = "manualClusterAnnot",
   graphType = "absolute")
+
+plotDiscreteBar(projART_matched, "outs/png/art_discreteHivOnly_matched.png",
+  cluster = "manualClusterAnnot",
+  graphType = "hivOnly")
 ```
 
 ### BEGIN DIFFERENTIAL ANALYSIS
@@ -411,8 +419,6 @@ art_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
 
 makeDifferentialLollipop(art_markers, "outs/png/art_lollipop.png")
 ```
-
-
 
 ```{r}
 # add peaks!
