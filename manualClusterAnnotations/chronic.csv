@@ -1,8 +1,10 @@
 ﻿cluster,annotation
-C5,APC
-C9,Early differentiated
-C8,mTfh
-C4,Later differentiated
-C6,B
-C7,GC-Tfh
-C2,Monocyte
+C9,CD4/APC
+C8,B
+C7,APC/fDC
+C6,CD8 #2
+C5,CD4 mTfh/Late differentiated
+C13,CD4 Early differentiated
+C12,CD4 Mid differentiated
+C11,CD8 #1
+C10,CD4 Tfh

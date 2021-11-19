@@ -1,4 +1,11 @@
 ######
+# COLOR SCHEMES
+######
+HIVPOSCOLOR <- "#e63946"
+HIVNEGCOLOR <- "#444444"
+BASEFONTSIZE <- 8 / ggplot2:::.pt
+
+######
 # Generate UMAP df from ArchRProject
 ######
 generateUmapDfFromArchR <- function(
@@ -30,6 +37,7 @@ umapTheme <- theme(
 ######
 plotDualUmap <- function(proj,
   fn,
+  device = c("png", "svg"),
   ggtheme = umapTheme,
   secondGraphColumn = "haystackOut",
   cluster = "Clusters",
@@ -73,7 +81,18 @@ plotDualUmap <- function(proj,
     scale_color_manual(values = c("#cccccc30", "#ff000060")) +
     guides(colour = guide_legend(override.aes = list(size=6)))
   
-  ggsave(fn, plot = p1 + p2, dpi = "retina", width = 10, height = 6)  
+  if (is.vector(device)) {
+    for (d in device) {
+      gfn <- glue("outs/{d}/{fn}.{d}")
+      
+      ggsave(gfn, plot = p1 + p2, dpi = "retina", device = d, width = 10, height = 6)  
+    }
+  } else {
+    gfn <- glue("outs/{device}/{fn}.{device}")
+    
+    ggsave(gfn, plot = p1 + p2, dpi = "retina", device = device, width = 10, height = 6)      
+  }
+
 }
 
 ######
@@ -93,54 +112,49 @@ ggDiscreteBarTheme <- list(
   scale_color_manual(values = c("#444444", "#e63946"))
 )
 
+ggDiscreteLollipopTheme <- list(
+  theme_classic(),
+  theme(legend.position = "none",
+    axis.title = element_text(size = 8),
+    axis.text = element_text(size = 8),
+    plot.background = element_rect(fill = "transparent", colour = NA),
+    panel.background = element_rect(fill = "transparent", colour = NA),
+    plot.margin = unit(c(0.1, 0.3, 0.1, 0.1), "in")
+  )
+)
 
-plotDiscreteBar <- function(proj, fn,
+
+plotDiscreteBar <- function(proj,
+  fn,
+  device = c("png", "svg"),
   cluster,
   secondGraphColumn = "haystackOut",
   graphType = "proportion") {
   df <- generateUmapDfFromArchR(proj, cluster = cluster, secondGraphColumn = secondGraphColumn)
   
-  stopifnot(graphType %in% c("proportion", "absolute", "hivOnly"))
+  stopifnot(graphType %in% c("absolute", "hivOnly"))
   
-  if (graphType == "proportion") {
-    p <- df %>%
-      group_by(cluster) %>%
-      summarize(propPos = sum(secondMetadata) / n(),
-        propNeg = sum(!secondMetadata) / n()) %>%
-      pivot_longer(cols = starts_with("prop"),
-        names_to = "proviralStatus",
-        values_to = "proportion") %>%
-      mutate(proviralStatus = gsub("prop", "", proviralStatus)) %>%
-      ggplot(., aes(x = cluster, y = proportion, fill = proviralStatus)) +
-      geom_bar(stat = "identity", width = 0.7, position = position_dodge(0.7)) +
-      labs(x = "Cluster",
-        y = "Proportion of cluster") +
-      geom_text(aes(y = ifelse(proportion > 0.85, proportion, proportion + 0.02),
-        label = scales::label_percent(accuracy = 0.1)(proportion),
-        color = proviralStatus,
-        hjust = ifelse(proportion > 0.85, 1, 0)),
-        position = position_dodge(0.7),
-        vjust = 0.5,
-        size = 1.5) +
-      scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
-      ggDiscreteBarTheme    
-  } else if (graphType == "absolute") {
+  if (graphType == "absolute") {
     p <- df %>%
       mutate(cluster = factor(cluster),
         hivPos = factor(ifelse(secondMetadata, "Pos", "Neg"))) %>%
       dplyr::count(cluster, hivPos, .drop = FALSE) %>%
-      {ggplot(., aes(x = cluster, y = n, fill = hivPos)) +
-          geom_bar(stat = "identity", width = 0.7, position = position_dodge(0.7)) +
-          labs(x = "Cluster",
-            y = "Number of cells") +
-          geom_text(aes(y = n + max(.$n) * 0.02, label = n, color = hivPos),
-            position = position_dodge(0.7),
+      {ggplot(., aes(y = cluster, fill = hivPos)) +
+          geom_linerange(aes(xmin = 0, xmax = n, y = cluster, color = hivPos),
+            linetype = "dotted", position = position_dodge(0.8)) +
+          geom_point(aes(x = n, color = hivPos), size = 1, position = position_dodge(0.8)) + 
+          labs(y = "Cluster",
+            x = "Number of cells") +
+          geom_text(aes(x = n + max(.$n) * 0.05, label = n, color = hivPos),
+            position = position_dodge(0.8),
             vjust = 0.5,
             hjust = 0,
-            size = 1.5) +
-          scale_y_continuous(expand = c(0, 0), limits = c(0, max(.$n + 500))) +
-          scale_x_discrete(drop = FALSE) +
-          ggDiscreteBarTheme}
+            size = BASEFONTSIZE) +
+          scale_x_continuous(expand = c(0, 0), limits = c(0, max(.$n + 500))) +
+          scale_y_discrete(drop = FALSE) +
+          scale_fill_manual(values = c("#999999", "#e63946")) +
+          scale_color_manual(values = c("#444444", "#e63946")) +
+          ggDiscreteLollipopTheme}
     
   } else {
     p <- df %>%
@@ -149,22 +163,36 @@ plotDiscreteBar <- function(proj, fn,
       dplyr::filter(hivPos != "Neg") %>%
       dplyr::count(cluster) %>%
       mutate(proportion = n / sum(n)) %>%
-      {ggplot(., aes(x = cluster, y = proportion)) +
-          geom_bar(stat = "identity", width = 0.7, fill = "#e63946") +
-          labs(x = "Cluster",
-            y = "Proportion of HIV+ cells") +
-          geom_text(aes(y = ifelse(proportion > 0.85, proportion, proportion + 0.02),
-            label = scales::label_percent(accuracy = 0.1)(proportion),
-            hjust = ifelse(proportion > 0.85, 1, 0)),
+      {ggplot(., aes(y = cluster)) +
+          geom_segment(aes(x = 0, xend = proportion, y = cluster, yend = cluster),
+            color = HIVPOSCOLOR, linetype = "dotted") +
+          geom_point(aes(x = proportion), color = HIVPOSCOLOR, size = 1) + 
+          labs(y = "Cluster",
+            x = "Proportion of HIV+ cells") +
+          geom_text(aes(x = proportion + 0.05,
+              label = scales::label_percent(accuracy = 0.1)(proportion)),
+            hjust = 0,
             vjust = 0.5,
-            color = "#e63946",
-            size = 1.5) +
-          scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
-          ggDiscreteBarTheme +
-          scale_fill_manual(values = "#e63946")}
+            color = HIVPOSCOLOR,
+            size = BASEFONTSIZE) +
+          scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
+          ggDiscreteLollipopTheme}
   }
+  
+  gwidth <- 3
+  gheight <- 3
 
-  ggsave(fn, plot = p, width = 2.5, height = 2.5, dpi = "retina")
+  if (is.vector(device)) {
+    for (d in device) {
+      gfn <- glue("outs/{d}/{fn}.{d}")
+      
+      ggsave(gfn, plot = p, dpi = "retina", device = d, width = gwidth, height = gheight)  
+    }
+  } else {
+    gfn <- glue("outs/{device}/{fn}.{device}")
+    
+    ggsave(gfn, plot = p, dpi = "retina", device = device, width = gwidth, height = gheight)      
+  }
 }
 
 # violin plot cleaner
@@ -238,26 +266,40 @@ makeCellPlot <- function(seu, tsa_catalog, cellID,
   return(cellPlt)
 }
 
-makeDifferentialLollipop <- function(markers, fn) {
+makeDifferentialLollipop <- function(markers, fn, device = c("png", "svg")) {
   pSapPi <- markers %>%
     arrange(desc(abs(piScore)), .by_group = TRUE) %>%
     mutate(cleanName = factor(cleanName, levels = rev(cleanName))) %>%
     mutate(markerColor = ifelse(piScore > 0, "#e63946", "#999999")) %>%
     {ggplot(., aes(x = abs(piScore), y = cleanName, color = markerColor)) +
-        geom_point(size = 1.5) + 
         geom_segment(aes(x = 0, xend = abs(piScore), y = cleanName, yend = cleanName), linetype = "dotted") +
+        geom_point(size = 1.5) + 
         labs(y = "Surface marker",
-          x = "π score (log2FC * -log10(adj pval))") +
+          x = "π score") +
         scale_x_continuous(expand = c(0, 0), limits = c(0, max(abs(.$piScore) + 0.3))) +
         theme_classic() +
-        theme(axis.text.y = element_text(size = 6),
+        theme(axis.text = element_text(size = 8),
+          axis.title = element_text(size = 8),
           legend.position = "none",
           panel.background = element_rect(fill = NULL, colour = NULL),
+          strip.background = element_blank(),
           strip.placement = "outside") +
         scale_color_identity() +
         facet_grid(Status ~ ., scales = "free", space = "free")} 
   
-  ggsave(filename = fn, plot = pSapPi, width = 3, height = 2 + (nrow(markers) * 0.08), dpi = "retina")
+  gwidth <- 2.5
+  gheight <- 2 + (nrow(markers) * 0.08)
+  if (is.vector(device)) {
+    for (d in device) {
+      gfn <- glue("outs/{d}/{fn}.{d}")
+      
+      ggsave(gfn, plot = pSapPi, dpi = "retina", device = d, width = gwidth, height = gheight)  
+    }
+  } else {
+    gfn <- glue("outs/{device}/{fn}.{device}")
+    
+    ggsave(gfn, plot = pSapPi, dpi = "retina", device = device, width = gwidth, height = gheight)      
+  }
   
   return(pSapPi)
 }

@@ -19,6 +19,8 @@ filterClusterByProp <- function(proj, proportion) {
 addHaystackData <- function(proj, haystackParentDir, haystackSamples) {
   haystackList <- lapply(haystackSamples, function(i) {
     df <- read.csv(glue("{haystackParentDir}/{i}/viralFrags.tsv"), header = TRUE, sep = "\t")
+    df <- df %>%
+      filter(alreadyRecordedInIntegration != "True")
     
     intSiteFragsFn <- glue("{haystackParentDir}/{i}/integrationSites_viralFrags.tsv")
     if (file.exists(intSiteFragsFn)) {
@@ -43,13 +45,16 @@ addHaystackData <- function(proj, haystackParentDir, haystackSamples) {
   
   matchedHaystackArchRCells <- intersect(haystackPosCells$newCbc, proj$cellNames)
   
+  haystackPosCellsViralFrags <- haystackDf %>%
+    filter(newCbc %in% matchedHaystackArchRCells)
+  
   haystackOut <- rep(FALSE, length(proj$cellNames))
   names(haystackOut) <- proj$cellNames
   haystackOut[matchedHaystackArchRCells] <- TRUE
   
   proj$haystackOut <- haystackOut
   
-  return(proj)
+  return(list(newProj = proj, viralFrags = haystackPosCellsViralFrags))
 }
 
 ######

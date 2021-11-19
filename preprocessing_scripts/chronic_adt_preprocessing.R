@@ -4,7 +4,7 @@ suppressMessages(library(tidyverse))
 suppressMessages(library(glue))
 source("adt_preprocessing_general.R")
 
-samples <- c("C01_1", "C01_2", "C01_3")
+samples <- c("C01_1", "C01_2", "C01_3", "C02_1", "C02_2", "C02_3")
 
 tsa_catalog <- readRDS("../rds/tsa_catalog.rds")
 
@@ -24,7 +24,7 @@ adtChronic <- NormalizeData(adtChronic, normalization.method = "CLR", scale.fact
 adtChronic <- ScaleData(adtChronic) %>%
   RunPCA(features = rownames(adtChronic@assays$tsa))
 
-adtChronic$individual <- "C01"
+adtChronic$individual <- str_match(adtChronic$orig.ident, "C\\d+")[,1]
 
 adtChronic <- adtChronic %>%
   harmony::RunHarmony(group.by.vars = "individual", plot_convergence = TRUE)

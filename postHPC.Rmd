@@ -21,6 +21,7 @@ library(glue)
 
 source("common_scripts/graphs.R")
 source("common_scripts/archrCleaning.R")
+source("common_scripts/clusterAnnotation.R")
 ```
 
 ```{r}
@@ -30,21 +31,25 @@ addArchRThreads(threads = 2)
 ```{r}
 projInVitro <- loadArchRProject(path = "ND497_B_qcfiltTSS8/", showLogo = FALSE)
 
-projInVitro <- addHaystackData(proj = projInVitro,
+haystackInVitro <- addHaystackData(proj = projInVitro,
   haystackParentDir = "data/hiv-haystack",
   haystackSamples = c("ND497_B" = "ND497_B_v3"))
+
+projInVitro <- haystackInVitro$newProj
 ```
 
 ```{r}
-projChronic <- loadArchRProject(path = "C01_qcfiltTSS4/", showLogo = FALSE)
+projChronic <- loadArchRProject(path = "C01C02_qcfiltTSS6/", showLogo = FALSE)
 
 uniqChronicSamples <- unique(projChronic$Sample)
 haystackSamplePairingChronic <- paste0(uniqChronicSamples, "_hxb2")
 names(haystackSamplePairingChronic) <- uniqChronicSamples
   
-projChronic <- addHaystackData(proj = projChronic,
+haystackChronic <- addHaystackData(proj = projChronic,
   haystackParentDir = "data/hiv-haystack",
   haystackSamples = haystackSamplePairingChronic)
+
+projChronic <- haystackChronic$newProj
 
 projChronic <- addUMAP(ArchRProj = projChronic,
   reducedDims = "Harmony",
@@ -63,9 +68,11 @@ haystackSamplePairingART <- sapply(uniqSamples, function(i) {
   return(newSampleName)
 })
 
-projART <- addHaystackData(proj = projART,
+haystackART <- addHaystackData(proj = projART,
   haystackParentDir = "data/hiv-haystack",
   haystackSamples = haystackSamplePairingART)
+
+projART <- haystackART$newProj
 ```
 
 
@@ -137,14 +144,14 @@ adtART_matched <- subset(adtART, cells = projART_matched$cellNames)
 
 ```{r}
 # print out initial unlabeled umaps
-plotDualUmap(projInvitro_matched, fn = "outs/png/InVitro_unlabeledCluster_dualUmap.png")
+plotDualUmap(projInvitro_matched, fn = "InVitro_unlabeledCluster_dualUmap")
 
-plotDualUmap(projChronic_matched, fn = "outs/png/Chronic_unlabeledCluster_dualUmap.png", embedding = "UMAP2")
-plotDualUmap(projChronic_matched, fn = "outs/png/Chronic_unlabeledCluster_dualUmap_individual.png",
+plotDualUmap(projChronic_matched, fn = "Chronic_unlabeledCluster_dualUmap", embedding = "UMAP2")
+plotDualUmap(projChronic_matched, fn = "Chronic_unlabeledCluster_dualUmap_individual",
   embedding = "UMAP2", cluster = "Sample")
 
-plotDualUmap(projART_matched, fn = "outs/png/ART_unlabeledCluster_dualUmap.png")
-plotDualUmap(projART_matched, fn = "outs/png/ART_unlabeledCluster_dualUmap_individual.png", cluster = "Sample")
+plotDualUmap(projART_matched, fn = "ART_unlabeledCluster_dualUmap")
+plotDualUmap(projART_matched, fn = "ART_unlabeledCluster_dualUmap_individual", cluster = "Sample")
 ```
 
 
@@ -165,13 +172,16 @@ adtInVitro_matched$atacClusters <- projInvitro_matched$Clusters
 adtChronic_matched$atacClusters <- projChronic_matched$Clusters
 adtART_matched$atacClusters <- projART_matched$Clusters
 
-getBasePanelAndMarkers(seu = adtInVitro_matched, tsa_catalog = tsa_catalog, findMarkerMethod = "DESeq2",
+getBasePanelAndMarkers(seu = adtInVitro_matched, tsa_catalog = tsa_catalog, featuresToUse = inVitroAdtToUse,
+  findMarkerMethod = "wilcox",
   pngFn = "outs/png/InVitro_basepanel.png", tsvFn = "outs/tsv/InVitro_initClusterMarkers.tsv")
 
-getBasePanelAndMarkers(seu = adtChronic_matched, tsa_catalog = tsa_catalog, findMarkerMethod = "DESeq2",
+getBasePanelAndMarkers(seu = adtChronic_matched, tsa_catalog = tsa_catalog, featuresToUse = chronicAdtToUse,
+  findMarkerMethod = "wilcox",
   pngFn = "outs/png/chronic_basepanel.png", tsvFn = "outs/tsv/chronic_initClusterMarkers.tsv")
 
-getBasePanelAndMarkers(seu = adtART_matched, tsa_catalog = tsa_catalog, findMarkerMethod = "DESeq2",
+getBasePanelAndMarkers(seu = adtART_matched, tsa_catalog, featuresToUse = ARTAdtToUse,
+  findMarkerMethod = "wilcox",
   pngFn = "outs/png/art_basepanel.png", tsvFn = "outs/tsv/art_initClusterMarkers.tsv")
 ```
 
@@ -184,19 +194,17 @@ adtInVitro_matched$manualClusterAnnot <- projInvitro_matched$manualClusterAnnot
 adtInVitro_matched$haystackOut <- projInvitro_matched$haystackOut
 
 plotDualUmap(projInvitro_matched,
-  fn = "outs/png/inVitro_labeledCluster_dualUmap.png",
+  fn = "inVitro_labeledCluster_dualUmap", device = c("png", "svg"),
   cluster = "manualClusterAnnot")
 
-plotDiscreteBar(projInvitro_matched, "outs/png/inVitro_discreteProportion_matched.png",
+plotDiscreteBar(projInvitro_matched, "inVitro_discreteAbsolute_matched",
   cluster = "manualClusterAnnot",
-  graphType = "proportion")
+  graphType = "absolute",
+  device = c("png","svg"))
 
-plotDiscreteBar(projInvitro_matched, "outs/png/inVitro_discreteAbsolute_matched.png",
+plotDiscreteBar(projInvitro_matched, "inVitro_discreteHivOnly_matched",
   cluster = "manualClusterAnnot",
-  graphType = "absolute")
-
-plotDiscreteBar(projInvitro_matched, "outs/png/inVitro_discreteHivOnly_matched.png",
-  cluster = "manualClusterAnnot",
+  device = c("png", "svg"),
   graphType = "hivOnly")
 ```
 
@@ -209,19 +217,15 @@ adtChronic_matched$manualClusterAnnot <- projChronic_matched$manualClusterAnnot
 adtChronic_matched$haystackOut <- projChronic_matched$haystackOut
 
 plotDualUmap(projChronic_matched,
-  fn = "outs/png/chronic_labeledCluster_dualUmap.png",
+  fn = "chronic_labeledCluster_dualUmap",
   cluster = "manualClusterAnnot",
   embedding = "UMAP2")
 
-plotDiscreteBar(projChronic_matched, "outs/png/chronic_discreteProportion_matched.png",
-  cluster = "manualClusterAnnot",
-  graphType = "proportion")
-
-plotDiscreteBar(projChronic_matched, "outs/png/chronic_discreteAbsolute_matched.png",
+plotDiscreteBar(projChronic_matched, "chronic_discreteAbsolute_matched",
   cluster = "manualClusterAnnot",
   graphType = "absolute")
 
-plotDiscreteBar(projChronic_matched, "outs/png/chronic_discreteHivOnly_matched.png",
+plotDiscreteBar(projChronic_matched, "chronic_discreteHivOnly_matched",
   cluster = "manualClusterAnnot",
   graphType = "hivOnly")
 ```
@@ -235,18 +239,14 @@ adtART_matched$manualClusterAnnot <- projART_matched$manualClusterAnnot
 adtART_matched$haystackOut <- projART_matched$haystackOut
 
 plotDualUmap(projART_matched,
-  fn = "outs/png/art_labeledCluster_dualUmap.png",
+  fn = "art_labeledCluster_dualUmap",
   cluster = "manualClusterAnnot")
 
-plotDiscreteBar(projART_matched, "outs/png/art_discreteProportion_matched.png",
-  cluster = "manualClusterAnnot",
-  graphType = "proportion")
-
-plotDiscreteBar(projART_matched, "outs/png/art_discreteAbsolute_matched.png",
+plotDiscreteBar(projART_matched, "art_discreteAbsolute_matched",
   cluster = "manualClusterAnnot",
   graphType = "absolute")
 
-plotDiscreteBar(projART_matched, "outs/png/art_discreteHivOnly_matched.png",
+plotDiscreteBar(projART_matched, "art_discreteHivOnly_matched",
   cluster = "manualClusterAnnot",
   graphType = "hivOnly")
 ```
@@ -262,7 +262,7 @@ invitro_markers <- findHIVDifferentialMarkers(seu = adtInVitro_matched,
   featuresToUse = inVitroAdtToUse,
   tsa_catalog = tsa_catalog)
 
-makeDifferentialLollipop(invitro_markers, "outs/png/invitro_lollipop.png")
+makeDifferentialLollipop(invitro_markers, "invitro_lollipop")
 
 invitro_activeLaterCells <- adtInVitro_matched$haystackOut[grepl("(Later|Activated)", adtInVitro_matched$manualClusterAnnot) & invitro_tcells_check]
 invitro_activeLate_markers <- findHIVDifferentialMarkers(
@@ -272,7 +272,7 @@ invitro_activeLate_markers <- findHIVDifferentialMarkers(
   cellsNeg = names(invitro_activeLaterCells[!invitro_activeLaterCells]),
   featuresToUse = inVitroAdtToUse)
 
-makeDifferentialLollipop(invitro_activeLate_markers, "outs/png/invitro_lollipop_activeLate.png")
+makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_activeLate")
 
 invitro_earlyCells <- adtInVitro_matched$haystackOut[grepl("(Early|early)", adtInVitro_matched$manualClusterAnnot) & invitro_tcells_check]
 invitro_activeLate_markers <- findHIVDifferentialMarkers(
@@ -282,7 +282,7 @@ invitro_activeLate_markers <- findHIVDifferentialMarkers(
   cellsNeg = names(invitro_earlyCells[!invitro_earlyCells]),
   featuresToUse = inVitroAdtToUse)
 
-makeDifferentialLollipop(invitro_activeLate_markers, "outs/png/invitro_lollipop_early.png")
+makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_early")
 
 invitro_renamingDF <- getCellColData(projInvitro_matched, select = c("haystackOut", "manualClusterAnnot")) %>%
   as.data.frame(.) %>%
@@ -334,19 +334,23 @@ activatedVolcano <- data.frame(x = invitro_markerTest_Activated@assays@data@list
     TRUE ~ "Not significant"
 )) %>%
   {ggplot(data = ., aes(x = x, y = y, color = pointColor)) +
-  geom_point(size = 0.5) +
+  geom_point(size = 0.3, alpha = 0.8) +
   theme_classic() +
   labs(x = "log2 Fold Change",
     y = "-log10 FDR",
     color = "") +
   scale_y_continuous(expand = expansion(mult = c(0,0.05)), limits = c(0, NA)) +
-  scale_color_manual(values = c("blue", "grey", "red"))
+  scale_color_manual(values = c(HIVNEGCOLOR, "#bbbbbb", HIVPOSCOLOR))
   } +
-  theme(legend.position = "bottom",
+  theme(legend.position = "none",
+    axis.text = element_text(size = 8),
+    axis.title = element_text(size = 8),
+    legend.text = element_text(size = 8),
     aspect.ratio = 1) +
-  guides(colour = guide_legend(override.aes = list(size = 5), nrow = 2))
+  guides(colour = guide_legend(override.aes = list(size = 3), nrow = 3))
 
-ggsave(filename = "outs/png/invitro_activatedHIVvolcano.png", plot = activatedVolcano, dpi = "retina", height = 4.5, width = 4.5)
+ggsave(filename = "outs/svg/invitro_activatedHIVvolcano.pdf",
+  plot = activatedVolcano, dpi = "retina", height = 2, width = 2)
 rm(activatedVolcano)
 
 projInvitro_matched <- addMotifAnnotations(ArchRProj = projInvitro_matched, motifSet = "cisbp", name = "Motif")
@@ -363,39 +367,55 @@ motifsDown <- peakAnnoEnrichment(
   peakAnnotation = "Motif",
   cutOff = "FDR < 0.05 & Log2FC < 0")
 
-plotMotifRank <- function(motifChanged, nLabel = 15) {
+plotMotifRank <- function(motifChanged, nLabel = 10) {
   df <- data.frame(TF = rownames(motifChanged), mlog10Padj = assay(motifChanged)[,1])
   df <- df[order(df$mlog10Padj, decreasing = TRUE),]
   df$rank <- seq_len(nrow(df))
   
   g <- ggplot(df, aes(rank, mlog10Padj)) + 
     geom_hline(yintercept = -log10(0.05), color = "#333333", linetype = "dotted") +
-    geom_point(size = 0.5, color = "#00000080", shape = 16) +
+    geom_point(size = 1, color = "#00000080", shape = 16) +
     ggrepel::geom_label_repel(
       data = df[rev(seq_len(nLabel)), ], aes(x = rank, y = mlog10Padj, label = TF), 
-      size = 1.5,
+      size = 6 / ggplot2:::.pt,
       max.overlaps = 30,
       force_pull = 5,
       force = 3,
       segment.color = "#22222280",
       label.padding = 0.16,
-      label.size = 0.16,
+      label.size = 0.2,
       color = "black",
       min.segment.length = 0.1
     ) +
     theme_classic() +
+    theme(axis.title = element_text(size = 8),
+      axis.text = element_text(size = 8)) +
     labs(x = "Rank Sorted TFs Enriched",
-      y = "-log10(adj p) Motif Enrichment")
+      y = "-log10(p adj)")
   
   return(g)
 }
 
-ggsave("outs/png/invitro_motifsUp_activatedHIVneg.png", plot = plotMotifRank(motifsDown), width = 3, height = 3, dpi = "retina")
-ggsave("outs/png/invitro_motifsUp_activatedHIVpos.png", plot = plotMotifRank(motifsUp), width = 3, height = 3, dpi = "retina")
+ggsave("outs/svg/invitro_motifsUp_activatedHIVneg.svg", plot = plotMotifRank(motifsDown), width = 2.5, height = 2.5, dpi = "retina")
+ggsave("outs/svg/invitro_motifsUp_activatedHIVpos.svg", plot = plotMotifRank(motifsUp), width = 2.5, height = 2.5, dpi = "retina")
 ```
 
+
 ```{r}
-chronic_tcells_check <- !(adtChronic_matched$manualClusterAnnot %in% c("B", "Monocyte", "APC"))
+projInvitro_matched <- addArchRAnnotations(ArchRProj = projInvitro_matched, collection = "EncodeTFBS")
+
+motifsUpEncode <- peakAnnoEnrichment(
+  seMarker = invitro_markerTest_Activated,
+  ArchRProj = projInvitro_matched,
+  peakAnnotation = "EncodeTFBS",
+  cutOff = "FDR < 0.05 & Log2FC > 0")
+
+ggsave("outs/png/invitro_motifsUpEncode_activatedHIVpos.png", plot = plotMotifRank(motifsUpEncode), width = 3, height = 3, dpi = "retina")
+```
+
+
+```{r}
+chronic_tcells_check <- !(grepl("(B|APC|CD8)", adtChronic_matched$manualClusterAnnot))
 chronic_tcells <- adtChronic_matched$haystackOut[chronic_tcells_check]
 chronic_markers <- findHIVDifferentialMarkers(seu = adtChronic_matched,
   cellsPos = names(chronic_tcells[chronic_tcells]),
@@ -404,7 +424,70 @@ chronic_markers <- findHIVDifferentialMarkers(seu = adtChronic_matched,
   findMarkerMethod = "DESeq2",
   tsa_catalog = tsa_catalog)
 
-makeDifferentialLollipop(chronic_markers, "outs/png/chronic_lollipop.png")
+makeDifferentialLollipop(chronic_markers, "chronic_lollipop")
+
+chronic_renamingDF <- getCellColData(projChronic_matched, select = c("haystackOut", "manualClusterAnnot")) %>%
+  as.data.frame(.) %>%
+  mutate(cellNames = projChronic_matched$cellNames) %>%
+  mutate(condensedCluster = case_when(
+    grepl("(Early|Mid|Late|Tfh)", manualClusterAnnot) ~ "T cell",
+    TRUE ~ "Other")) %>%
+  mutate(condensedHIVCluster = paste0(condensedCluster, "_", haystackOut))
+
+projChronic_matched <- addCellColData(ArchRProj = projChronic_matched,
+  data = chronic_renamingDF$condensedHIVCluster,
+  cells = chronic_renamingDF$cellNames,
+  name = "condensedHivCluster",
+  force = TRUE)
+
+projChronic_matched <- addGroupCoverages(ArchRProj = projChronic_matched,
+  groupBy = "condensedHivCluster",
+  minReplicates = 3,
+  force = TRUE)
+
+projChronic_matched <- addReproduciblePeakSet(
+  ArchRProj = projChronic_matched,
+  groupBy = "condensedHivCluster", 
+  pathToMacs2 = "/Users/vince/anaconda3/envs/asapseq/bin/macs2",
+  force = TRUE
+)
+
+projChronic_matched <- addPeakMatrix(projChronic_matched, force = TRUE)
+
+chronic_markerTest <- getMarkerFeatures(
+  ArchRProj = projChronic_matched, 
+  useMatrix = "PeakMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "T cell_TRUE",
+  bgdGroups = "T cell_FALSE",
+  maxCells = 1000,
+  verbose = FALSE
+)
+
+chronic_activatedVolcano <- data.frame(x = chronic_markerTest@assays@data@listData$Log2FC$x,
+  y = log10(chronic_markerTest@assays@data@listData$FDR$x) * -1) %>%
+  mutate(pointColor = case_when(
+    y > -1 * log10(0.05) & x > 0 ~ "Upregulated in HIV+",
+    y > -1 * log10(0.05) & x < 0 ~ "Downregulated in HIV+",
+    TRUE ~ "Not significant"
+)) %>%
+  {ggplot(data = ., aes(x = x, y = y, color = pointColor)) +
+  geom_point(size = 0.5) +
+  theme_classic() +
+  labs(x = "log2 Fold Change",
+    y = "-log10 FDR",
+    color = "") +
+  scale_y_continuous(expand = expansion(mult = c(0,0.05)), limits = c(0, NA)) +
+  scale_color_manual(values = c("blue", "grey", "red"))
+  } +
+  theme(legend.position = "bottom",
+    aspect.ratio = 1) +
+  guides(colour = guide_legend(override.aes = list(size = 5), nrow = 2))
+
+ggsave(filename = "outs/png/chronic_HIVvolcano.png", plot = chronic_activatedVolcano, dpi = "retina", height = 4.5, width = 4.5)
+rm(chronic_activatedVolcano)
 ```
 
 ```{r}
@@ -421,46 +504,31 @@ makeDifferentialLollipop(art_markers, "outs/png/art_lollipop.png")
 ```
 
 ```{r}
-# add peaks!
-# run outside of rmd chunk
-proj_clustFilt_matched <- addGroupCoverages(ArchRProj = proj_clustFilt_matched,
-  groupBy = "haystackOut",
-  minCells = 150, # adjustment needed
-  minReplicates = 5,
-  force = TRUE)
-
-# projCleaned <- addGroupCoverages(ArchRProj = projCleaned,
-#   groupBy = "annotClusters",
-#   force = TRUE)
-
-# run outside of rmd chunk
-proj_clustFilt_matched <- addReproduciblePeakSet(
-  ArchRProj = proj_clustFilt_matched, 
-  groupBy = "haystackOut", 
-  pathToMacs2 = "/Users/vince/anaconda3/envs/asapseq/bin/macs2",
-  force = TRUE
+viralFragGraphTheme <- list(
+  scale_x_continuous(expand = c(0, 0), limits = c(0,NA)),
+  theme_classic(),
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.major.y = element_line(color = "#DDDDDD80"),
+    strip.background = element_rect(color = "#ffffff", fill = "#ffffff"),
+    strip.text = element_text(size = 10)),
+  labs(x = "Read fragment aligned to provirus (bp)")
 )
 
-# run outside of rmd chunk
-proj_clustFilt_matched <- addPeakMatrix(proj_clustFilt_matched, force = TRUE)
+haystackInVitro$viralFrags %>%
+  ggplot() +
+  geom_segment(aes(x = startBp, xend = endBp, y = newCbc, yend = newCbc), color = "#FF000050") +
+  viralFragGraphTheme
 
-# run outside of rmd chunk
-markersPeaks <- getMarkerFeatures(
-  ArchRProj = proj_clustFilt_matched, 
-  useMatrix = "PeakMatrix", 
-  groupBy = "haystackOut",
-  bias = c("TSSEnrichment", "log10(nFrags)"),
-  testMethod = "wilcoxon",
-  useGroups = "TRUE",
-  bgdGroups = "FALSE"
-)
 
-plotMarkers(seMarker = markersPeaks, name = "TRUE", cutOff = "FDR <= 0.1 & abs(Log2FC) >= 0.5", plotAs = "Volcano")
+haystackChronic$viralFrags %>%
+  mutate(individual = ifelse(grepl("C01", sample), "C01", "C02")) %>%
+  ggplot() +
+  geom_segment(aes(x = startBp, xend = endBp, y = newCbc, yend = newCbc), color = "#FF000050", size = 2) +
+  facet_grid(individual ~ ., scales = "free_y", space = "free_y") +
+  viralFragGraphTheme
 
-# takes forever to run...
-# proj_clustFilt_matched <- addDeviationsMatrix(
-#   ArchRProj = proj_clustFilt_matched, 
-#   peakAnnotation = "Motif",
-#   force = TRUE
-# )
 ```
+

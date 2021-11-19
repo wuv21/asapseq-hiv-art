@@ -14,6 +14,10 @@ getBasePanelAndMarkers <- function(seu,
     test.use = findMarkerMethod,
     features = featuresToUse)
   
+  if (!("gene" %in% names(clusterMarkers))) {
+    clusterMarkers$gene <- rownames(clusterMarkers)
+  }
+  
   clusterMarkersFilt <- clusterMarkers %>%
     left_join(tsa_catalog %>% dplyr::select(DNA_ID, cleanName), by = c("gene" = "DNA_ID")) %>% 
     filter(p_val_adj < 0.05) %>%
