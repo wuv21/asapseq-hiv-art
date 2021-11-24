@@ -14,14 +14,14 @@ suppressMessages(library(ArchR))
 suppressMessages(library(GenomicFeatures))
 suppressMessages(library(rtracklayer))
 library(patchwork)
-library(pheatmap)
-library(UpSetR)
+# library(UpSetR)
 library(Seurat)
 library(glue)
 
 source("common_scripts/graphs.R")
 source("common_scripts/archrCleaning.R")
 source("common_scripts/clusterAnnotation.R")
+source("common_scripts/differentialExpression.R")
 ```
 
 ```{r}
@@ -73,43 +73,6 @@ haystackART <- addHaystackData(proj = projART,
   haystackSamples = haystackSamplePairingART)
 
 projART <- haystackART$newProj
-```
-
-
-```{r}
-# proj_clustFilt <- addImputeWeights(proj_clustFilt)
-# 
-# pImpute <- plotEmbedding(
-#     ArchRProj = proj_clustFilt, 
-#     colorBy = "GeneScoreMatrix", 
-#     name = c("TBX21", "SELL", "CCR7", "IL7R", "IL2RA", "CD27", "CD28", "FAS", "CD19"), 
-#     embedding = "UMAP",
-#     imputeWeights = getImputeWeights(proj_clustFilt)
-# )
-# 
-# pImputeGrid <- lapply(pImpute, function(x) {
-#     gene <- str_extract(x$labels$title, "(\\S+)$")
-#     
-#     x +
-#       guides(color = FALSE, fill = FALSE) + 
-#       theme(plot.margin = unit(c(0, 0, 0, 0), "cm")) +
-#       labs(title = gene,
-#         x = "UMAP Dim 1",
-#         y = "UMAP Dim 2") +
-#       theme(
-#         axis.line = element_line(colour = "black"),
-#         axis.text.x = element_blank(),
-#         axis.ticks.x = element_blank(),
-#         axis.text.y = element_blank(),
-#         axis.ticks.y = element_blank(),
-#         plot.title = element_text(size = 12),
-#         panel.border = element_blank(),
-#         panel.background = element_blank(),
-#         plot.margin = unit(c(0,0,0,0), "cm"),
-#         plot.title.position = "plot"
-#       )
-# })
-# do.call(cowplot::plot_grid, c(list(ncol = 3), pImputeGrid))
 ```
 
 
@@ -275,14 +238,14 @@ invitro_activeLate_markers <- findHIVDifferentialMarkers(
 makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_activeLate")
 
 invitro_earlyCells <- adtInVitro_matched$haystackOut[grepl("(Early|early)", adtInVitro_matched$manualClusterAnnot) & invitro_tcells_check]
-invitro_activeLate_markers <- findHIVDifferentialMarkers(
+invitro_early_markers <- findHIVDifferentialMarkers(
   seu = adtInVitro_matched,
   tsa_catalog = tsa_catalog,
   cellsPos = names(invitro_earlyCells[invitro_earlyCells]),
   cellsNeg = names(invitro_earlyCells[!invitro_earlyCells]),
   featuresToUse = inVitroAdtToUse)
 
-makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_early")
+makeDifferentialLollipop(invitro_early_markers, "invitro_lollipop_early")
 
 invitro_renamingDF <- getCellColData(projInvitro_matched, select = c("haystackOut", "manualClusterAnnot")) %>%
   as.data.frame(.) %>%
@@ -324,6 +287,7 @@ invitro_markerTest_Activated <- getMarkerFeatures(
   maxCells = 1000,
   verbose = FALSE
 )
+
 
 # custom volcano plot (essentially the same as plotMarkers)
 activatedVolcano <- data.frame(x = invitro_markerTest_Activated@assays@data@listData$Log2FC$x,
@@ -367,37 +331,8 @@ motifsDown <- peakAnnoEnrichment(
   peakAnnotation = "Motif",
   cutOff = "FDR < 0.05 & Log2FC < 0")
 
-plotMotifRank <- function(motifChanged, nLabel = 10) {
-  df <- data.frame(TF = rownames(motifChanged), mlog10Padj = assay(motifChanged)[,1])
-  df <- df[order(df$mlog10Padj, decreasing = TRUE),]
-  df$rank <- seq_len(nrow(df))
-  
-  g <- ggplot(df, aes(rank, mlog10Padj)) + 
-    geom_hline(yintercept = -log10(0.05), color = "#333333", linetype = "dotted") +
-    geom_point(size = 1, color = "#00000080", shape = 16) +
-    ggrepel::geom_label_repel(
-      data = df[rev(seq_len(nLabel)), ], aes(x = rank, y = mlog10Padj, label = TF), 
-      size = 6 / ggplot2:::.pt,
-      max.overlaps = 30,
-      force_pull = 5,
-      force = 3,
-      segment.color = "#22222280",
-      label.padding = 0.16,
-      label.size = 0.2,
-      color = "black",
-      min.segment.length = 0.1
-    ) +
-    theme_classic() +
-    theme(axis.title = element_text(size = 8),
-      axis.text = element_text(size = 8)) +
-    labs(x = "Rank Sorted TFs Enriched",
-      y = "-log10(p adj)")
-  
-  return(g)
-}
-
-ggsave("outs/svg/invitro_motifsUp_activatedHIVneg.svg", plot = plotMotifRank(motifsDown), width = 2.5, height = 2.5, dpi = "retina")
-ggsave("outs/svg/invitro_motifsUp_activatedHIVpos.svg", plot = plotMotifRank(motifsUp), width = 2.5, height = 2.5, dpi = "retina")
+plotMotifRank(motifsDown, "invitro_motifsUp_activatedHIVneg")
+plotMotifRank(motifsUp, "invitro_motifsUp_activatedHIVpos")
 ```
 
 
@@ -443,6 +378,7 @@ projChronic_matched <- addCellColData(ArchRProj = projChronic_matched,
 projChronic_matched <- addGroupCoverages(ArchRProj = projChronic_matched,
   groupBy = "condensedHivCluster",
   minReplicates = 3,
+  minCells = 30,
   force = TRUE)
 
 projChronic_matched <- addReproduciblePeakSet(
@@ -489,6 +425,41 @@ chronic_activatedVolcano <- data.frame(x = chronic_markerTest@assays@data@listDa
 ggsave(filename = "outs/png/chronic_HIVvolcano.png", plot = chronic_activatedVolcano, dpi = "retina", height = 4.5, width = 4.5)
 rm(chronic_activatedVolcano)
 ```
+
+```{r}
+if("Motif" %ni% names(projChronic_matched@peakAnnotation)){
+    projChronic_matched <- addMotifAnnotations(ArchRProj = projChronic_matched, motifSet = "cisbp", name = "Motif")
+}
+
+projChronic_matched <- addBgdPeaks(projChronic_matched)
+
+projChronic_matched <- addDeviationsMatrix(
+  ArchRProj = projChronic_matched, 
+  peakAnnotation = "Motif",
+  force = TRUE
+)
+
+chronic_markerTest <- getMarkerFeatures(
+  ArchRProj = projChronic_matched, 
+  useMatrix = "MotifMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "T cell_TRUE",
+  bgdGroups = "T cell_FALSE",
+  maxCells = 1000,
+  verbose = FALSE,
+  useSeqnames = "z"
+)
+
+data.frame(
+  fdr = log10(chronic_markerTest@assays@data@listData$FDR$`T cell_TRUE`) * -1,
+  meandiff = chronic_markerTest@assays@data@listData$MeanDiff$`T cell_TRUE`,
+  motif = chronic_markerTest@elementMetadata@listData[["name"]]) %>%
+  filter(fdr > -1 * log10(0.05)) %>%
+  arrange(desc(meandiff))
+```
+
 
 ```{r}
 art_tcells_check <- !(grepl("Other", adtART_matched$manualClusterAnnot))

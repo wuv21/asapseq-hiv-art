@@ -27,7 +27,7 @@ adtART <- ScaleData(adtART) %>%
 adtART$individual <- str_match(adtART$orig.ident, "A\\d+")[,1]
 
 adtART <- adtART %>%
-  harmony::RunHarmony(group.by.vars = "individual", plot_convergence = TRUE)
+  harmony::RunHarmony(group.by.vars = "individual", plot_convergence = TRUE, assay.use = "tsa")
 
 adtART <- RenameCells(adtART, new.names = gsub("#_", "#", paste0(Cells(adtART), "-1")))
 

@@ -285,9 +285,10 @@ makeDifferentialLollipop <- function(markers, fn, device = c("png", "svg")) {
           strip.background = element_blank(),
           strip.placement = "outside") +
         scale_color_identity() +
+        coord_cartesian(clip = "off") +
         facet_grid(Status ~ ., scales = "free", space = "free")} 
   
-  gwidth <- 2.5
+  gwidth <- 3
   gheight <- 2 + (nrow(markers) * 0.08)
   if (is.vector(device)) {
     for (d in device) {
@@ -304,5 +305,43 @@ makeDifferentialLollipop <- function(markers, fn, device = c("png", "svg")) {
   return(pSapPi)
 }
 
-
-
+plotMotifRank <- function(motifChanged, fn, nLabel = 10, device = c("png", "svg")) {
+  df <- data.frame(TF = rownames(motifChanged), mlog10Padj = assay(motifChanged)[,1])
+  df <- df[order(df$mlog10Padj, decreasing = TRUE),]
+  df$rank <- seq_len(nrow(df))
+  
+  g <- ggplot(df, aes(rank, mlog10Padj)) + 
+    geom_hline(yintercept = -log10(0.05), color = "#333333", linetype = "dotted") +
+    geom_point(size = 1, color = "#00000080", shape = 16) +
+    ggrepel::geom_label_repel(
+      data = df[rev(seq_len(nLabel)), ], aes(x = rank, y = mlog10Padj, label = TF), 
+      size = 6 / ggplot2:::.pt,
+      max.overlaps = 30,
+      force_pull = 5,
+      force = 3,
+      segment.color = "#22222280",
+      label.padding = 0.16,
+      label.size = 0.2,
+      color = "black",
+      min.segment.length = 0.1
+    ) +
+    theme_classic() +
+    theme(axis.title = element_text(size = 8),
+      axis.text = element_text(size = 8)) +
+    labs(x = "Rank Sorted TFs Enriched",
+      y = "-log10(p adj)")
+  
+  gwidth <- 2.5
+  gheight <- 2.5
+  if (is.vector(device)) {
+    for (d in device) {
+      gfn <- glue("outs/{d}/{fn}.{d}")
+      
+      ggsave(gfn, plot = g, dpi = "retina", device = d, width = gwidth, height = gheight)  
+    }
+  } else {
+    gfn <- glue("outs/{device}/{fn}.{device}")
+    
+    ggsave(gfn, plot = g, dpi = "retina", device = device, width = gwidth, height = gheight)      
+  }
+}

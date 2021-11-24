@@ -27,7 +27,7 @@ adtChronic <- ScaleData(adtChronic) %>%
 adtChronic$individual <- str_match(adtChronic$orig.ident, "C\\d+")[,1]
 
 adtChronic <- adtChronic %>%
-  harmony::RunHarmony(group.by.vars = "individual", plot_convergence = TRUE)
+  harmony::RunHarmony(group.by.vars = "individual", plot_convergence = TRUE, assay.use = "tsa")
 
 adtChronic <- RenameCells(adtChronic, new.names = gsub("#_", "#", paste0(Cells(adtChronic), "-1")))
 

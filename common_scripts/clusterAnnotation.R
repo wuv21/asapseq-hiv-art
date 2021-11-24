@@ -45,7 +45,9 @@ getBasePanelAndMarkers <- function(seu,
     "A0146", #CD69
     "A0085", #CD25
     "A0089", #TIGIT
-    "A0088" #PD1
+    "A0088", #PD1
+    "A0141", #CCR5
+    "A0144" #CXCR5
   )
   
   baseRidgePlot <- RidgePlot(seu,
