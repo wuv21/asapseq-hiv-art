@@ -2,8 +2,28 @@
 # COLOR SCHEMES
 ######
 HIVPOSCOLOR <- "#e63946"
-HIVNEGCOLOR <- "#444444"
-BASEFONTSIZE <- 8 / ggplot2:::.pt
+HIVNEGCOLOR <- "#aaaaaa"
+BASEPTAXISFONTSIZE <- 7
+BASEPTFONTSIZE <- 7
+BASEFONTSIZE <- BASEPTFONTSIZE / ggplot2:::.pt
+
+
+savePlot <- function(plot, fn, devices, gheight, gwidth) {
+  if (!is.vector(devices)) {
+    devices <- c(devices)
+  }
+  
+  for (d in devices) {
+    gfn <- glue("outs/{d}/{fn}.{d}")
+    
+    if (d == "rds") {
+      saveRDS(plot, gfn)
+    } else {
+      ggsave(gfn, plot = plot, dpi = "retina", device = d, width = gwidth, height = gheight)  
+    }
+  }
+}
+
 
 ######
 # Generate UMAP df from ArchRProject
@@ -30,103 +50,106 @@ generateUmapDfFromArchR <- function(
 ######
 umapTheme <- theme(
   legend.position = "bottom",
+  legend.text = element_text(size = BASEPTFONTSIZE),
+  legend.title = element_blank(),
+  axis.title = element_text(size = BASEPTFONTSIZE),
+  axis.text = element_text(size = BASEPTAXISFONTSIZE),
+  legend.spacing.x = unit(BASEPTFONTSIZE / 2, 'points'),
+  # legend.spacing.y = unit(BASEPTFONTSIZE / 4, 'points'),
+  legend.key.size = unit(BASEPTFONTSIZE * 1.1, 'points'),
+  legend.background = element_rect(fill = "transparent", colour = NA),
+  panel.background = element_rect(fill = "transparent", colour = NA),
   plot.background = element_rect(fill = "transparent", colour = NA))
 
+
 ######
-# Plot dual umap
+# Plot umap
 ######
-plotDualUmap <- function(proj,
+plotUmap <- function(
+  proj,
   fn,
-  device = c("png", "svg"),
+  devices = c("png", "rds"),
   ggtheme = umapTheme,
-  secondGraphColumn = "haystackOut",
-  cluster = "Clusters",
+  colorBy = "Clusters",
+  colorByLabel = colorBy,
+  colorScheme = NULL,
+  labelColors = TRUE,
+  rasterize = TRUE,
+  bringToTop = FALSE,
   embedding = "UMAP") {
   
-  df <- generateUmapDfFromArchR(proj,
-    secondGraphColumn = secondGraphColumn, cluster = cluster, embedding = embedding)
+  df <- generateUmapDfFromArchR(proj, cluster = colorBy, embedding = embedding)
   
-  clusterLabelUmapPos <- df %>% 
-    group_by(cluster) %>% 
-    summarize(medianX = median(x),
-      medianY = median(y),
-      iqrXFactor = IQR(x) / 1.25,
-      iqrYFactor = IQR(y) / 1.25,
-      x = mean(x[x > (medianX - iqrXFactor) & x < (iqrXFactor + medianX)]),
-      y = mean(y[y > (medianY - iqrYFactor) & y < (iqrYFactor + medianY)]))
-  
-  p1 <- ggplot(df, aes(x = x, y = y)) +
-    geom_point(alpha = 0.8, aes(color = cluster), size = 0.5) +
-    labs(x = "UMAP 1",
-      y = "UMAP 2",
-      color = "Cluster") +
-    theme_classic() +
-    ggtheme +
-    guides(colour = guide_legend(override.aes = list(size=6), nrow = 3)) +
-    ggrepel::geom_label_repel(data = clusterLabelUmapPos,
-      aes(x = x, y = y, label = cluster),
-      label.size = 0.1,
-      size = 2.5,
-      segment.color = NA)
-  
-  p2 <- df %>%
-    arrange(secondMetadata) %>%
-    ggplot(., aes(x = x, y = y)) +
-    geom_point(alpha = 0.7, aes(color = secondMetadata), size = 0.5) +
-    labs(x = "UMAP 1",
-      y = "UMAP 2",
-      color = "HIV+") +
-    theme_classic() +
-    ggtheme +
-    scale_color_manual(values = c("#cccccc30", "#ff000060")) +
-    guides(colour = guide_legend(override.aes = list(size=6)))
-  
-  if (is.vector(device)) {
-    for (d in device) {
-      gfn <- glue("outs/{d}/{fn}.{d}")
-      
-      ggsave(gfn, plot = p1 + p2, dpi = "retina", device = d, width = 10, height = 6)  
-    }
-  } else {
-    gfn <- glue("outs/{device}/{fn}.{device}")
-    
-    ggsave(gfn, plot = p1 + p2, dpi = "retina", device = device, width = 10, height = 6)      
+  if (bringToTop) {
+    df <- df %>%
+      arrange(cluster)
   }
-
+  
+  if (colorBy == "haystackOut") {
+    df <- df %>%
+      mutate(cluster = ifelse(cluster, "HIV+", "HIV-"))
+  }
+  
+  p1 <- ggplot(df, aes(x = x, y = y))
+  
+  if (rasterize) {
+    p1 <- p1 + rasterize(geom_point(alpha = 0.6, aes(color = cluster), size = 0.5), dpi = 300)
+  } else {
+    p1 <- p1 + geom_point(alpha = 0.8, aes(color = cluster), size = 0.5)
+  }
+  
+  p1 <- p1 +
+  labs(x = "UMAP 1",
+    y = "UMAP 2",
+    color = colorByLabel) +
+  theme_classic() +
+  ggtheme +
+  guides(colour = guide_legend(override.aes = list(size = 4), nrow = 5))
+    
+  if (is.null(colorScheme) & colorBy == "haystackOut") {
+    p1 <- p1 + scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR))
+  } else if (!is.null(colorScheme)) {
+    p1 <- p1 + colorScheme
+  }
+  
+  if (labelColors) {
+    clusterLabelUmapPos <- df %>% 
+      group_by(cluster) %>% 
+      summarize(medianX = median(x),
+        medianY = median(y),
+        iqrXFactor = IQR(x) / 1.5,
+        iqrYFactor = IQR(y) / 1.5,
+        x = mean(x[x > (medianX - iqrXFactor) & x < (iqrXFactor + medianX)]),
+        y = mean(y[y > (medianY - iqrYFactor) & y < (iqrYFactor + medianY)]))
+    
+    p1 <- p1 + 
+      ggrepel::geom_label_repel(data = clusterLabelUmapPos,
+        aes(x = x, y = y, label = cluster),
+        label.size = 0.05,
+        size = BASEFONTSIZE,
+        segment.color = NA)
+  }
+  
+  savePlot(plot = p1, fn = fn, devices = devices, gheight = 4, gwidth = 3.5)
 }
 
-######
-# Discrete bar plot theme
-######
-ggDiscreteBarTheme <- list(
-  theme_classic(),
-  theme(legend.position = "none",
-    axis.title = element_text(size = 7),
-    axis.text = element_text(size = 5),
-    plot.background = element_rect(fill = "transparent", colour = NA),
-    panel.background = element_rect(fill = "transparent", colour = NA),
-    plot.margin = unit(c(0.1, 0.3, 0.1, 0.1), "in")
-  ),
-  coord_flip(clip = "off"),
-  scale_fill_manual(values = c("#999999", "#e63946")),
-  scale_color_manual(values = c("#444444", "#e63946"))
-)
 
 ggDiscreteLollipopTheme <- list(
   theme_classic(),
+  coord_cartesian(clip = "off"),
   theme(legend.position = "none",
-    axis.title = element_text(size = 8),
-    axis.text = element_text(size = 8),
-    plot.background = element_rect(fill = "transparent", colour = NA),
-    panel.background = element_rect(fill = "transparent", colour = NA),
+    axis.title = element_text(size = BASEPTFONTSIZE),
+    axis.text = element_text(size = BASEPTAXISFONTSIZE, color = "#000000"),
+    # plot.background = element_rect(fill = "transparent", colour = NA),
+    # panel.background = element_rect(fill = "transparent", colour = NA),
     plot.margin = unit(c(0.1, 0.3, 0.1, 0.1), "in")
   )
 )
 
 
-plotDiscreteBar <- function(proj,
+plotDiscreteLollipop <- function(proj,
   fn,
-  device = c("png", "svg"),
+  devices = c("png", "svg", "rds"),
   cluster,
   secondGraphColumn = "haystackOut",
   graphType = "proportion") {
@@ -152,8 +175,8 @@ plotDiscreteBar <- function(proj,
             size = BASEFONTSIZE) +
           scale_x_continuous(expand = c(0, 0), limits = c(0, max(.$n + 500))) +
           scale_y_discrete(drop = FALSE) +
-          scale_fill_manual(values = c("#999999", "#e63946")) +
-          scale_color_manual(values = c("#444444", "#e63946")) +
+          scale_fill_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
+          scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
           ggDiscreteLollipopTheme}
     
   } else {
@@ -179,21 +202,9 @@ plotDiscreteBar <- function(proj,
           ggDiscreteLollipopTheme}
   }
   
-  gwidth <- 3
-  gheight <- 3
-
-  if (is.vector(device)) {
-    for (d in device) {
-      gfn <- glue("outs/{d}/{fn}.{d}")
-      
-      ggsave(gfn, plot = p, dpi = "retina", device = d, width = gwidth, height = gheight)  
-    }
-  } else {
-    gfn <- glue("outs/{device}/{fn}.{device}")
-    
-    ggsave(gfn, plot = p, dpi = "retina", device = device, width = gwidth, height = gheight)      
-  }
+  savePlot(plot = p, fn = fn, devices = devices, gheight = 3, gwidth = 3)
 }
+
 
 # violin plot cleaner
 clean_VlnPlot <- function(gList, finalplotCol = 5, newTitle = c()) {
@@ -218,7 +229,6 @@ clean_VlnPlot <- function(gList, finalplotCol = 5, newTitle = c()) {
   
   return(gridExtra::grid.arrange(grobs = g_grob, ncol = finalplotCol))
 }
-
 
 
 # cell plot
@@ -253,7 +263,6 @@ makeCellPlot <- function(seu, tsa_catalog, cellID,
       panel.grid = element_blank(),
       plot.margin = unit(rep(-0.5, 4), "in")
     ) +
-    # geom_segment(x = 0, y = 0, xend = 360, yend = 0, colour = "#e6394610", size=0.1, inherit.aes = FALSE) +
     ylim(-1, max(singleAdtDf$normExp, na.rm = T) + 0.5) +
     geom_text(aes(x = cleanName, y = normExp + 0.1, label = label, hjust = hjust, angle = angle),
       color="black", alpha = 0.6, size = 2.25, inherit.aes = FALSE) +
@@ -266,11 +275,15 @@ makeCellPlot <- function(seu, tsa_catalog, cellID,
   return(cellPlt)
 }
 
-makeDifferentialLollipop <- function(markers, fn, device = c("png", "svg")) {
+makeDifferentialLollipop <- function(
+  markers,
+  fn,
+  devices = c("png", "svg", "rds")) {
+  
   pSapPi <- markers %>%
     arrange(desc(abs(piScore)), .by_group = TRUE) %>%
     mutate(cleanName = factor(cleanName, levels = rev(cleanName))) %>%
-    mutate(markerColor = ifelse(piScore > 0, "#e63946", "#999999")) %>%
+    mutate(markerColor = ifelse(piScore > 0, HIVPOSCOLOR, HIVNEGCOLOR)) %>%
     {ggplot(., aes(x = abs(piScore), y = cleanName, color = markerColor)) +
         geom_segment(aes(x = 0, xend = abs(piScore), y = cleanName, yend = cleanName), linetype = "dotted") +
         geom_point(size = 1.5) + 
@@ -278,8 +291,8 @@ makeDifferentialLollipop <- function(markers, fn, device = c("png", "svg")) {
           x = "π score") +
         scale_x_continuous(expand = c(0, 0), limits = c(0, max(abs(.$piScore) + 0.3))) +
         theme_classic() +
-        theme(axis.text = element_text(size = 8),
-          axis.title = element_text(size = 8),
+        theme(axis.text = element_text(size = BASEPTFONTSIZE),
+          axis.title = element_text(size = BASEPTFONTSIZE),
           legend.position = "none",
           panel.background = element_rect(fill = NULL, colour = NULL),
           strip.background = element_blank(),
@@ -288,60 +301,83 @@ makeDifferentialLollipop <- function(markers, fn, device = c("png", "svg")) {
         coord_cartesian(clip = "off") +
         facet_grid(Status ~ ., scales = "free", space = "free")} 
   
-  gwidth <- 3
-  gheight <- 2 + (nrow(markers) * 0.08)
-  if (is.vector(device)) {
-    for (d in device) {
-      gfn <- glue("outs/{d}/{fn}.{d}")
-      
-      ggsave(gfn, plot = pSapPi, dpi = "retina", device = d, width = gwidth, height = gheight)  
-    }
-  } else {
-    gfn <- glue("outs/{device}/{fn}.{device}")
-    
-    ggsave(gfn, plot = pSapPi, dpi = "retina", device = device, width = gwidth, height = gheight)      
-  }
-  
-  return(pSapPi)
+  savePlot(plot = pSapPi, fn = fn, devices = devices, gheight = 2 + (nrow(markers) * 0.08), gwidth = 3)
 }
 
-plotMotifRank <- function(motifChanged, fn, nLabel = 10, device = c("png", "svg")) {
+plotMotifRank <- function(
+  motifChanged,
+  fn,
+  nLabel = 10,
+  color = NULL,
+  devices = c("png", "svg", "rds")) {
+  
   df <- data.frame(TF = rownames(motifChanged), mlog10Padj = assay(motifChanged)[,1])
   df <- df[order(df$mlog10Padj, decreasing = TRUE),]
   df$rank <- seq_len(nrow(df))
   
+  df <- df %>%
+    mutate(color = ifelse(df$mlog10Padj > -log10(0.05), color, "#DDDDDD"))
+  
   g <- ggplot(df, aes(rank, mlog10Padj)) + 
     geom_hline(yintercept = -log10(0.05), color = "#333333", linetype = "dotted") +
-    geom_point(size = 1, color = "#00000080", shape = 16) +
-    ggrepel::geom_label_repel(
+    geom_point(size = 1, shape = 16, aes(color = color)) +
+    ggrepel::geom_text_repel(
       data = df[rev(seq_len(nLabel)), ], aes(x = rank, y = mlog10Padj, label = TF), 
-      size = 6 / ggplot2:::.pt,
+      size = 5 / ggplot2:::.pt,
       max.overlaps = 30,
-      force_pull = 5,
-      force = 3,
-      segment.color = "#22222280",
-      label.padding = 0.16,
-      label.size = 0.2,
-      color = "black",
+      force = 9,
+      family = "Arial",
+      direction = "y",
+      nudge_x = 500,
+      hjust = 0,
+      ylim = c(-log10(0.05), max(df$mlog10Padj)),
+      segment.color = color,
+      color = color,
       min.segment.length = 0.1
     ) +
+    scale_color_identity() +
     theme_classic() +
-    theme(axis.title = element_text(size = 8),
-      axis.text = element_text(size = 8)) +
+    theme(
+      axis.title = element_text(size = BASEPTFONTSIZE),
+      axis.text = element_text(size = BASEPTFONTSIZE),
+      axis.text.y = element_text(margin = margin(20, 0, 20, 0))) +
     labs(x = "Rank Sorted TFs Enriched",
       y = "-log10(p adj)")
   
-  gwidth <- 2.5
-  gheight <- 2.5
-  if (is.vector(device)) {
-    for (d in device) {
-      gfn <- glue("outs/{d}/{fn}.{d}")
-      
-      ggsave(gfn, plot = g, dpi = "retina", device = d, width = gwidth, height = gheight)  
-    }
-  } else {
-    gfn <- glue("outs/{device}/{fn}.{device}")
-    
-    ggsave(gfn, plot = g, dpi = "retina", device = device, width = gwidth, height = gheight)      
-  }
+  savePlot(plot = g, fn = fn, devices = devices, gheight = 2.5, gwidth = 2.5)
+}
+
+plotVolcanoFromGetMarkerFeatures <- function(
+  markerFeatures,
+  fn,
+  posFoldChangeName = "Upregulated in HIV+",
+  negFoldChageName = "Downregulated in HIV+",
+  devices = c("png", "rds")
+) {
+  df <- data.frame(x = markerFeatures@assays@data@listData$Log2FC$x,
+    y = log10(markerFeatures@assays@data@listData$FDR$x) * -1) %>%
+    mutate(pointColor = case_when(
+      y > -1 * log10(0.05) & x > 0 ~ posFoldChangeName,
+      y > -1 * log10(0.05) & x < 0 ~ negFoldChageName,
+      TRUE ~ "Not significant"
+    ))
+  
+  g <- df %>%  
+    {ggplot(data = ., aes(x = x, y = y, color = pointColor)) +
+        rasterize(geom_point(size = 0.3, alpha = 0.8), dpi = 300) +
+        theme_classic() +
+        labs(x = "log2 Fold Change",
+          y = "-log10 FDR",
+          color = "") +
+        scale_y_continuous(expand = expansion(mult = c(0,0.05)), limits = c(0, NA)) +
+        scale_color_manual(values = c(HIVNEGCOLOR, "#dddddd", HIVPOSCOLOR))
+    } +
+    theme(legend.position = "bottom",
+      axis.text = element_text(size = BASEPTFONTSIZE),
+      axis.title = element_text(size = BASEPTFONTSIZE),
+      legend.key.size = unit(BASEPTFONTSIZE, 'points'),
+      legend.text = element_text(size = BASEPTFONTSIZE)) +
+    guides(colour = guide_legend(override.aes = list(size = 1), ncol = 1))
+  
+  savePlot(plot = g, fn = fn, devices = devices, gheight = 2, gwidth = 2)
 }
