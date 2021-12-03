@@ -12,13 +12,16 @@ figH <- readRDS("outs/rds/invitro_motifsUp_activatedHIVpos.rds") + ggtitle("h")
 
 a_legend <- as_ggplot(get_legend(figA + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1)) +
-    theme(legend.margin=margin(0,0,0,0), legend.box.margin=margin(-10,-10,-10,-10))))
+    theme(legend.margin=margin(0,0,0,0),
+      legend.box.margin=margin(-10,-10,-10,-10),
+      legend.justification = "left")))
 
 b_legend <- as_ggplot(get_legend(figB + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1)) +
     theme(
       legend.margin=margin(0,0,0,0),
-      legend.box.margin=margin(-10,-10,-10,-10))))
+      legend.box.margin=margin(-10,-10,-10,-10),
+      legend.justification = "left")))
 
 umapPlotTheme <- theme(
   legend.position = "none",
@@ -28,18 +31,6 @@ umapPlotTheme <- theme(
 
 figA <- figA + umapPlotTheme
 figB <- figB + umapPlotTheme
-
-# layout <- c(
-#   area(1, 1, 2, 3), #a
-#   area(1, 4, 2, 6), #b
-#   area(1, 7, 2, 9), #legend
-#   area(3, 1, 4, 3), #c
-#   area(3, 4, 4, 6), #d
-#   area(3, 7, 6, 9), #e
-#   area(5, 1, 6, 2), #f
-#   area(5, 3, 6, 4), #g
-#   area(5, 5, 6, 6) #h
-# )
 
 layout <- c(
   area(1, 1, 3, 3), #a
@@ -63,12 +54,12 @@ subplotTheme <- theme(
 
 p <- wrap_elements(figA + subplotTheme) +
   wrap_elements(figB + subplotTheme) + 
-  wrap_elements((a_legend + subplotTheme + theme(plot.margin = unit(c(10, 0, 0, 0), "pt"))) / 
-      (b_legend + subplotTheme + theme(plot.margin = unit(c(0, 0, 40, 0), "pt")))) +
+  wrap_elements((a_legend + subplotTheme + theme(plot.margin = unit(c(10, 0, 0, 30), "pt"))) / 
+      (b_legend + subplotTheme + theme(plot.margin = unit(c(0, 0, 40, 30), "pt")))) +
   wrap_elements(figC + subplotTheme) +
   wrap_elements(figD + subplotTheme) +
   wrap_elements(figE + subplotTheme) +
-  wrap_elements(figF + subplotTheme + coord_cartesian() + theme(legend.margin=margin(0,0,5,0), legend.box.margin=margin(-10,-10,-10,-10))) +
+  wrap_elements(figF + subplotTheme + theme(legend.margin=margin(0,0,5,0), legend.box.margin=margin(-10,-10,-10,-10))) +
   wrap_elements(figG + subplotTheme) +
   wrap_elements(figH + subplotTheme) +
   plot_layout(design = layout)

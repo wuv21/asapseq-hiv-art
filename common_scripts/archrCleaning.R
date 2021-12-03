@@ -1,21 +1,20 @@
 ######
 # Filter small clusters based on proportion
 ######
-filterClusterByProp <- function(proj, proportion) {
+filterClusterByProp <- function(proj, proportion, cluster) {
   # filter cells that are in small clusters
-  clusterSize <- table(proj$Clusters) / length(proj$cellNames) * 100
+  clusters <- getCellColData(proj, select = cluster)[, 1]
+  
+  clusterSize <- table(clusters) / length(proj$cellNames) * 100
   clusterSizeFilt <- clusterSize >= proportion
   
-  idxClusterPass <- BiocGenerics::which(clusterSizeFilt[proj$Clusters])
+  idxClusterPass <- BiocGenerics::which(clusterSizeFilt[clusters])
   cellsClusterPass <- proj$cellNames[idxClusterPass]
   proj_clustFilt <- proj[cellsClusterPass, ]
   
   return(proj_clustFilt)
 }
 
-######
-# Filter small clusters based on proportion
-######
 addHaystackData <- function(proj, haystackParentDir, haystackSamples) {
   haystackList <- lapply(haystackSamples, function(i) {
     df <- read.csv(glue("{haystackParentDir}/{i}/viralFrags.tsv"), header = TRUE, sep = "\t")

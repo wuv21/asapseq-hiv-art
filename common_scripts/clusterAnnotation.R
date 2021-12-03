@@ -1,5 +1,60 @@
+getBaseATACPanel <- function(
+  proj,
+  fn,
+  embedding = "UMAP"
+) {
+  baseGenes <- c(
+    "CD3D",
+    "CD4",
+    "MPO",
+    "CD8A",
+    "MS4A1",
+    "NCAM1",
+    "TBX21",
+    "EOMES",
+    "SELL",
+    "FAS",
+    "FOXP3",
+    "CD69",
+    "CXCR5",
+    "CCR5",
+    "CD27",
+    "CD28"
+  )
+  
+  embed <- plotEmbedding(
+    ArchRProj = proj,
+    colorBy = "GeneScoreMatrix",
+    name = baseGenes,
+    embedding = embedding,
+    baseSize = 5,
+    imputeWeights = getImputeWeights(proj))
+  
+  embed2 <- lapply(seq_along(baseGenes), function(i) {
+    g <- embed[[i]]
+    g <- g + 
+      labs(title = baseGenes[i]) + 
+      theme(
+        axis.title = element_blank(),
+        plot.title = element_text(size = 8, margin = margin(5, 0, 0, 0)),
+        legend.margin = margin(5,0,5,0),
+        legend.box.margin = margin(-10,-10,-5,-10),
+        legend.text = element_text(size = 5),
+        legend.title = element_text(size = 5),
+        legend.key.size = unit(0.6, "lines"),
+        plot.margin = unit(c(0,0,0,0), "pt"))
+    
+    return(g)
+  })
+  
+  p <- patchwork::wrap_plots(embed2, ncol = 4)
+  ggsave(filename = fn, plot = p, height = 10, width = 8)
+}
+
+
 # initial cluster annotation
-getBasePanelAndMarkers <- function(seu,
+getBasePanelAndMarkers <- function(
+  seu,
   tsa_catalog,
   pngFn,
   tsvFn,
@@ -35,6 +90,7 @@ getBasePanelAndMarkers <- function(seu,
     "A0046", #CD8
     "A0081", #CD14
     "A0083", #CD16
+    "A0047", #CD56
     "A0050", #CD19
     "A0087", #CD45RO
     "A0063", #CD45RA
@@ -47,7 +103,8 @@ getBasePanelAndMarkers <- function(seu,
     "A0089", #TIGIT
     "A0088", #PD1
     "A0141", #CCR5
-    "A0144" #CXCR5
+    "A0144", #CXCR5
+    "A0149" #CD161
   )
   
   baseRidgePlot <- RidgePlot(seu,
@@ -72,14 +129,14 @@ getBasePanelAndMarkers <- function(seu,
   
   cowplot::save_plot(filename = pngFn,
     plot = do.call(cowplot::plot_grid, c(list(ncol = 5), baseRidgePlotGrid)),
-    base_height = 7,
-    base_width = 10,
+    base_height = 8,
+    base_width = 11,
     bg = "#ffffff",
     dpi = "retina")
 }
 
 # assign manual cluster annotation
-assignManualAnnotation <- function(archrProj, annotFn, slotName = "manualClusterAnnot") {
+assignManualAnnotation <- function(archrProj, annotFn, cluster, slotName = "manualClusterAnnot") {
   annotDf <- read.csv(annotFn, header = TRUE)
   
   manualAnnots <- annotDf$annotation
@@ -87,7 +144,7 @@ assignManualAnnotation <- function(archrProj, annotFn, slotName = "manualCluster
   
   archrProj <- addCellColData(
     ArchRProj = archrProj,
-    data = manualAnnots[archrProj$Clusters],
+    data = manualAnnots[getCellColData(archrProj, select = cluster)[, 1]],
     cells = archrProj$cellNames,
     name = "manualClusterAnnot",
     force = TRUE)

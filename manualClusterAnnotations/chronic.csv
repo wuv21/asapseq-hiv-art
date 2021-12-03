@@ -1,10 +1,13 @@
 ﻿cluster,annotation
-C9,CD4/APC
-C8,B
-C7,APC/fDC
-C6,CD8 #2
-C5,CD4 mTfh/Late differentiated
-C13,CD4 Early differentiated
-C12,CD4 Mid differentiated
-C11,CD8 #1
-C10,CD4 Tfh
+C9,APC
+C8,CD4 Tcm CD127+/-
+C7,CD4 Tcm/activated/resident
+C5,CD4 Trm
+C4,CD4 Treg
+C3,CD4 Tcm/Trm CD127+
+C2,CD4 Tfh
+C13,B naive
+C12,B memory/GC
+C11,APC/fDC
+C10,CD8
+C1,ILC/APC/Other

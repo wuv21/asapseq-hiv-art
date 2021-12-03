@@ -1,13 +1,11 @@
 ﻿cluster,annotation
-C18,Early differentiated #3
-C15,Late differentiated #2
-C17,Early differentiated #2
-C19,Early differentiated #1
-C4,Monocyte/other #2
-C21,Potential Treg
-C14,Late differentiated #3
-C20,Late differentiated #1
-C22,Monocyte/other #3
-C5,Other/potential multiplets
-C3,Monocyte/other #1
-C13,Late differentiated #4
+C5,Monocyte/Other #1
+C4,Monocyte/Other #2
+C3,B/Monocyte/Other
+C21,Later differentiated #4
+C20,Early differentiated #2
+C19,Early differentiated #3
+C18,Early differentiated #1
+C14,Later differentiated #2
+C13,Later differentiated #1
+C11,Later differentiated #3

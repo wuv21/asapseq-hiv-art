@@ -93,9 +93,9 @@ plotUmap <- function(
   p1 <- ggplot(df, aes(x = x, y = y))
   
   if (rasterize) {
-    p1 <- p1 + rasterize(geom_point(alpha = 0.6, aes(color = cluster), size = 0.5), dpi = 300)
+    p1 <- p1 + rasterize(geom_point(alpha = 0.6, aes(color = cluster), size = 0.25), dpi = 300)
   } else {
-    p1 <- p1 + geom_point(alpha = 0.8, aes(color = cluster), size = 0.5)
+    p1 <- p1 + geom_point(alpha = 0.8, aes(color = cluster), size = 0.25)
   }
   
   p1 <- p1 +
@@ -173,7 +173,7 @@ plotDiscreteLollipop <- function(proj,
             vjust = 0.5,
             hjust = 0,
             size = BASEFONTSIZE) +
-          scale_x_continuous(expand = c(0, 0), limits = c(0, max(.$n + 500))) +
+          scale_x_continuous(expand = c(0, 0), limits = c(0, max(.$n * 1.05))) +
           scale_y_discrete(drop = FALSE) +
           scale_fill_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
           scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
@@ -309,20 +309,43 @@ plotMotifRank <- function(
   fn,
   nLabel = 10,
   color = NULL,
-  devices = c("png", "svg", "rds")) {
+  devices = c("png", "rds"),
+  direction = NULL,
+  chromVARmode = FALSE) {
   
-  df <- data.frame(TF = rownames(motifChanged), mlog10Padj = assay(motifChanged)[,1])
-  df <- df[order(df$mlog10Padj, decreasing = TRUE),]
-  df$rank <- seq_len(nrow(df))
   
+  if (chromVARmode) {
+    df <- data.frame(
+      y = log10(assays(motifChanged)$FDR[, 1]) * -1,
+      meandiff = assays(motifChanged)$MeanDiff[, 1],
+      motif = elementMetadata(motifChanged)$name)
+    
+    if (direction == "negative") {
+      df <- filter(df, meandiff < 0)
+    } else {
+      df <- filter(df, meandiff > 0)
+    }
+    
+    df <- df[order(df$y, decreasing = TRUE), ]
+    df$x <- seq_len(nrow(df))
+    
+    yLbl <- "-log10(FDR)"
+  } else {
+    df <- data.frame(motif = rownames(motifChanged), y = assay(motifChanged)[,1])
+    df <- df[order(df$y, decreasing = TRUE), ]
+    df$x <- seq_len(nrow(df))
+    
+    yLbl <- "-log10(p adj)"
+  }
+
   df <- df %>%
-    mutate(color = ifelse(df$mlog10Padj > -log10(0.05), color, "#DDDDDD"))
+    mutate(color = ifelse(y > -log10(0.05), color, "#DDDDDD"))
   
-  g <- ggplot(df, aes(rank, mlog10Padj)) + 
+  g <- ggplot(df, aes(x, y)) + 
     geom_hline(yintercept = -log10(0.05), color = "#333333", linetype = "dotted") +
     geom_point(size = 1, shape = 16, aes(color = color)) +
     ggrepel::geom_text_repel(
-      data = df[rev(seq_len(nLabel)), ], aes(x = rank, y = mlog10Padj, label = TF), 
+      data = df[rev(seq_len(nLabel)), ], aes(x = x, y = y, label = motif), 
       size = 5 / ggplot2:::.pt,
       max.overlaps = 30,
       force = 9,
@@ -330,7 +353,7 @@ plotMotifRank <- function(
       direction = "y",
       nudge_x = 500,
       hjust = 0,
-      ylim = c(-log10(0.05), max(df$mlog10Padj)),
+      ylim = c(-log10(0.05), max(df$y) * 1.02),
       segment.color = color,
       color = color,
       min.segment.length = 0.1
@@ -339,23 +362,79 @@ plotMotifRank <- function(
     theme_classic() +
     theme(
       axis.title = element_text(size = BASEPTFONTSIZE),
-      axis.text = element_text(size = BASEPTFONTSIZE),
-      axis.text.y = element_text(margin = margin(20, 0, 20, 0))) +
-    labs(x = "Rank Sorted TFs Enriched",
-      y = "-log10(p adj)")
+      axis.text = element_text(size = BASEPTFONTSIZE)) +
+    labs(x = "Rank Sorted Motifs Enriched",
+      y = yLbl)
   
   savePlot(plot = g, fn = fn, devices = devices, gheight = 2.5, gwidth = 2.5)
 }
+
+plotMotifDot <- function(
+  markerFeatures,
+  fn,
+  direction = "positive",
+  devices = c("png", "rds")
+) {
+  df <- data.frame(
+    y = log10(assays(markerFeatures)$FDR[, 1]) * -1,
+    meandiff = assays(markerFeatures)$MeanDiff[, 1],
+    motif = elementMetadata(markerFeatures)$name)
+  
+  if (direction == "negative") {
+    df <- filter(df, meandiff < 0)
+    pointColor  <- HIVNEGCOLOR
+    
+  } else {
+    df <- filter(df, meandiff > 0)
+    pointColor <- HIVPOSCOLOR
+  }
+  
+  df <- filter(df, y > -log10(0.05))
+  df <- df[order(df$y, decreasing = TRUE), ]
+  df$motif <- factor(df$motif, levels = df$motif)
+  
+  g <- ggplot(df, aes(x = motif, y = y)) +
+    geom_point(color = pointColor) +
+    theme_classic() +
+    coord_cartesian(clip = "off") +
+    theme(
+      axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text = element_text(size = BASEPTFONTSIZE),
+      axis.title = element_text(size = BASEPTFONTSIZE)
+    ) +
+    labs(x = "Motif",
+      y = "-log10(FDR)")
+  
+  savePlot(plot = g, fn = fn, devices = devices, gheight = 2, gwidth = nrow(df) / 5)
+}
+
 
 plotVolcanoFromGetMarkerFeatures <- function(
   markerFeatures,
   fn,
   posFoldChangeName = "Upregulated in HIV+",
   negFoldChageName = "Downregulated in HIV+",
-  devices = c("png", "rds")
+  devices = c("png", "rds"),
+  chromVARmode = FALSE
 ) {
-  df <- data.frame(x = markerFeatures@assays@data@listData$Log2FC$x,
-    y = log10(markerFeatures@assays@data@listData$FDR$x) * -1) %>%
+  if (chromVARmode) {
+      df <- data.frame(
+        y = log10(assays(markerFeatures)$FDR[, 1]) * -1,
+        x = assays(markerFeatures)$MeanDiff[, 1],
+        motif = elementMetadata(markerFeatures)$name)
+        
+    xLbl <- "Mean difference in chromVAR\nbias-corrected deviations"
+    yLbl <- "-log10(FDR)"
+    
+  } else {
+    df <- data.frame(x = markerFeatures@assays@data@listData$Log2FC$x,
+      y = log10(markerFeatures@assays@data@listData$FDR$x) * -1)
+    
+    xLbl <- "log2(Fold change)"
+    yLbl <- "-log10(FDR)"
+  }
+  
+  df <- df %>%
     mutate(pointColor = case_when(
       y > -1 * log10(0.05) & x > 0 ~ posFoldChangeName,
       y > -1 * log10(0.05) & x < 0 ~ negFoldChageName,
@@ -366,8 +445,8 @@ plotVolcanoFromGetMarkerFeatures <- function(
     {ggplot(data = ., aes(x = x, y = y, color = pointColor)) +
         rasterize(geom_point(size = 0.3, alpha = 0.8), dpi = 300) +
         theme_classic() +
-        labs(x = "log2 Fold Change",
-          y = "-log10 FDR",
+        labs(x = xLbl,
+          y = yLbl,
           color = "") +
         scale_y_continuous(expand = expansion(mult = c(0,0.05)), limits = c(0, NA)) +
         scale_color_manual(values = c(HIVNEGCOLOR, "#dddddd", HIVPOSCOLOR))
@@ -379,5 +458,5 @@ plotVolcanoFromGetMarkerFeatures <- function(
       legend.text = element_text(size = BASEPTFONTSIZE)) +
     guides(colour = guide_legend(override.aes = list(size = 1), ncol = 1))
   
-  savePlot(plot = g, fn = fn, devices = devices, gheight = 2, gwidth = 2)
+  savePlot(plot = g, fn = fn, devices = devices, gheight = 3, gwidth = 3)
 }
