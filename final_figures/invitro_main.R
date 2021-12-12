@@ -57,7 +57,7 @@ p <- wrap_elements(figA + subplotTheme) +
   wrap_elements((a_legend + subplotTheme + theme(plot.margin = unit(c(10, 0, 0, 30), "pt"))) / 
       (b_legend + subplotTheme + theme(plot.margin = unit(c(0, 0, 40, 30), "pt")))) +
   wrap_elements(figC + subplotTheme) +
-  wrap_elements(figD + subplotTheme) +
+  wrap_elements(figD + subplotTheme + theme(plot.margin = unit(c(0, 0, 0, 10), "pt"))) +
   wrap_elements(figE + subplotTheme) +
   wrap_elements(figF + subplotTheme + theme(legend.margin=margin(0,0,5,0), legend.box.margin=margin(-10,-10,-10,-10))) +
   wrap_elements(figG + subplotTheme) +

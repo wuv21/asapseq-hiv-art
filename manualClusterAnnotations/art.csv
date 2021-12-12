@@ -1,11 +1,20 @@
 ﻿cluster,annotation
-C5,Monocyte/Other #1
-C4,Monocyte/Other #2
-C3,B/Monocyte/Other
-C21,Later differentiated #4
-C20,Early differentiated #2
-C19,Early differentiated #3
-C18,Early differentiated #1
-C14,Later differentiated #2
-C13,Later differentiated #1
-C11,Later differentiated #3
+C9,CD4 Tem/effector #2
+C8,CD4 Tem CD127high
+C7,CD4 Tem/effector #3
+C6,CD4 Tem
+C3,NK/NKT
+C24,APC/CD8
+C23,APC #2
+C21,CD4 Treg
+C20,CD4 Tem
+C2,pDC
+C19,APC #1
+C17,B
+C16,CD4 Tcm #4
+C15,CD4 Tcm #3
+C14,CD4 Tcm #2
+C13,CD4 cTfh
+C12,CD4 Tcm #1
+C11,CD4 MAIT
+C10,CD4 Tem/effector #1

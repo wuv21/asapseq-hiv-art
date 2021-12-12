@@ -8,7 +8,7 @@ BASEPTFONTSIZE <- 7
 BASEFONTSIZE <- BASEPTFONTSIZE / ggplot2:::.pt
 
 
-savePlot <- function(plot, fn, devices, gheight, gwidth) {
+savePlot <- function(plot, fn, devices, gheight, gwidth, scale = 1) {
   if (!is.vector(devices)) {
     devices <- c(devices)
   }
@@ -19,7 +19,7 @@ savePlot <- function(plot, fn, devices, gheight, gwidth) {
     if (d == "rds") {
       saveRDS(plot, gfn)
     } else {
-      ggsave(gfn, plot = plot, dpi = "retina", device = d, width = gwidth, height = gheight)  
+      ggsave(gfn, plot = plot, dpi = "retina", device = d, width = gwidth, height = gheight, scale = scale)  
     }
   }
 }
@@ -149,8 +149,10 @@ ggDiscreteLollipopTheme <- list(
 
 plotDiscreteLollipop <- function(proj,
   fn,
-  devices = c("png", "svg", "rds"),
+  devices = c("png", "rds"),
   cluster,
+  gheight = 3,
+  gwidth = 3,
   secondGraphColumn = "haystackOut",
   graphType = "proportion") {
   df <- generateUmapDfFromArchR(proj, cluster = cluster, secondGraphColumn = secondGraphColumn)
@@ -202,7 +204,7 @@ plotDiscreteLollipop <- function(proj,
           ggDiscreteLollipopTheme}
   }
   
-  savePlot(plot = p, fn = fn, devices = devices, gheight = 3, gwidth = 3)
+  savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }
 
 
@@ -460,3 +462,95 @@ plotVolcanoFromGetMarkerFeatures <- function(
   
   savePlot(plot = g, fn = fn, devices = devices, gheight = 3, gwidth = 3)
 }
+
+plotGeneAnnot <- function(geneAnnots) {
+  g <- ggplot(geneAnnots, aes(x = startPos, xend = endPos, y = annotation, yend = annotation)) +
+    geom_line(aes(group = annotation2), color = "#CCCCCC") +
+    geom_segment(size = 1.5) +
+    geom_text(aes(x = (startPos + endPos) / 2, label = annotation), hjust = 0.5, position = position_nudge(y = 0.6), size = 2) +
+    scale_x_continuous(expand = c(0, 0), limits = c(0,NA)) +
+    coord_cartesian(clip = "off") +
+    theme_classic() +
+    theme(axis.text.y = element_blank(),
+      axis.text.x = element_text(size = 6),
+      axis.title.x = element_blank(),
+      axis.line.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.y = element_blank())
+  
+  return(g)
+}
+
+plotFragDistribution <- function(frags, coverage) {
+  for (i in seq_along(frags$sample)) {
+    start <- frags$startBp[i] + 1
+    end <- frags$endBp[i] + 1
+    
+    coverage[c(start:end)] <- coverage[c(start:end)] + 1
+  }
+  
+  g <- data.frame(y = coverage / nrow(frags), x = seq(0, length(coverage) - 1)) %>%
+    ggplot(aes(x = x, y = y)) +
+    geom_line() +
+    theme_classic() +
+    coord_cartesian(clip = "off") +
+    scale_x_continuous(expand = c(0, 0), limits = c(0,NA)) +
+    theme(axis.line.y = element_blank(),
+      axis.text = element_text(size = 6),
+      axis.title = element_blank())
+  
+  return(g)
+}
+
+viralFragGraphTheme <- list(
+  scale_x_continuous(expand = c(0, 0), limits = c(0,NA)),
+  theme_classic(),
+  theme(
+    axis.line.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 6),
+    axis.title.x = element_text(size = 6),
+    panel.grid.major.y = element_line(color = "#DDDDDD80"),
+    strip.background = element_rect(color = "#ffffff", fill = "#ffffff"),
+    strip.text = element_text(size = BASEPTFONTSIZE)),
+  labs(x = "Read fragment aligned to provirus (bp)")
+)
+
+plotFragCoverage <- function(frags, separateByIndividual) {
+  g <- ggplot(frags) +
+    geom_segment(aes(x = startBp, xend = endBp, y = newCbc, yend = newCbc), color = "#FF000050")
+  
+  if (separateByIndividual) {
+    g <- g +
+      facet_grid(individual ~ ., scales = "free_y", space = "free_y")
+  }
+  
+  g <- g + viralFragGraphTheme
+  
+  return(g)
+}
+
+plotFragMultiGraph <- function(
+  frags,
+  coverage,
+  geneAnnots,
+  fn,
+  gwidth = 4,
+  gheight = 7.5,
+  separateByIndividual = FALSE,
+  devices = c("png", "rds")
+) {
+  
+  annotG <- plotGeneAnnot(geneAnnots)
+  distG <- plotFragDistribution(frags, coverage)
+  fragG <- plotFragCoverage(frags, separateByIndividual)
+  
+  p <- fragG / distG / annotG + 
+    plot_layout(heights = c(5, 0.5, 1.5)) & 
+    theme(text = element_text(family = "Arial"))
+  
+  savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}
+

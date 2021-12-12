@@ -1,0 +1,13 @@
+﻿genome,annotation,startPos,endPos
+hxb2,LTR,0,633
+hxb2,gag,789,2291
+hxb2,pol,2357,5095
+hxb2,vif,5040,5618
+hxb2,vpr,5558,5794
+hxb2,tat,5830,6044
+hxb2,tat,8378,8652
+hxb2,rev,5969,6044
+hxb2,rev,8378,8652
+hxb2,env,6224,8794
+hxb2,nef,8796,9167
+hxb2,LTR,9085,9718

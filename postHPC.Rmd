@@ -266,10 +266,12 @@ plotUmap(projART_matched, colorBy = "manualClusterAnnot", fn = "art_umap_labeled
 
 plotDiscreteLollipop(projART_matched, "art_discreteAbsolute_matched",
   cluster = "manualClusterAnnot",
+  gheight = 4,
   graphType = "absolute")
 
 plotDiscreteLollipop(projART_matched, "art_discreteHivOnly_matched",
   cluster = "manualClusterAnnot",
+  gheight = 4,
   graphType = "hivOnly")
 ```
 
@@ -358,6 +360,34 @@ invitro_markerTest_Activated <- getMarkerFeatures(
   verbose = FALSE
 )
 
+invitro_markerTest_activatedPeaks <- getMarkers(invitro_markerTest_Activated, cutOff = "FDR < 0.05", returnGR = TRUE)
+invitro_markerTest_activatedPeaks <- hiAnnotator::getNearestFeature(invitro_markerTest_activatedPeaks$Activated_TRUE, getGeneAnnotation(projInvitro_matched_gcPeak)[[1]], colnam = "symbol", feature.colnam = "symbol")
+invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_activatedPeaks) %>%
+  mutate(direction = ifelse(Log2FC > 0, "HIV+", "HIV-")) %>%
+  mutate(piScore = Log2FC * -log10(FDR)) %>%
+  group_by(direction) %>%
+  slice_max(order_by = abs(piScore), n = 10) %>%
+  arrange(abs(piScore), .by_group = TRUE) %>%
+  mutate(symbol2 = glue("{symbol} ({symbolDist})")) %>%
+  mutate(symbol2 = factor(symbol2, levels = symbol2)) %>%
+  ggplot(., aes(x = -log10(FDR), y = symbol2)) +
+  geom_segment(aes(yend = symbol2, x = 0, xend = -log10(FDR)), linetype = "dashed", color = "#CCCCCC") +
+  geom_point(aes(size = abs(piScore), color = Log2FC)) +
+  scale_color_distiller(palette = "RdBu", direction = -1) +
+  theme_classic() +
+  theme(panel.background = element_rect(fill = NULL, colour = NULL),
+    strip.background = element_blank(),
+    text = element_text(family = "Arial")) +
+  labs(color = "log2(fold change)",
+    size = "|π score|") +
+  scale_x_continuous(limits = c(0,NA)) +
+  coord_cartesian(clip = "off") +
+  facet_wrap(~ direction, scales = "free")
+
+ggsave("outs/png/invitro_markerTest_activated_topPeaks.png", dpi = "retina", height = 3.5, width = 7)
+
+
+
 plotVolcanoFromGetMarkerFeatures(invitro_markerTest_Activated,
   fn = "invitro_peaks_volcano_activatedHIV")
 
@@ -427,7 +457,8 @@ if (!dir.exists(chronicGcPeakFn)) {
   projChronic_matched <- addGroupCoverages(ArchRProj = projChronic_matched,
     groupBy = "condensedHivCluster",
     minReplicates = 3,
-    minCells = 30,
+    minCells = 15,
+    sampleRatio = 0.95,
     force = TRUE)
   
   projChronic_matched <- addReproduciblePeakSet(
@@ -497,7 +528,7 @@ plotMotifDot(chronic_markerTest, "chronic_chromVAR_motifsUp_HIVpos", direction =
 
 ## ART differential analysis
 ```{r}
-art_tcells_check <- !(grepl("Other", adtART_matched$manualClusterAnnot))
+art_tcells_check <- (grepl("CD4", adtART_matched$manualClusterAnnot))
 art_tcells <- adtART_matched$haystackOut[art_tcells_check]
 art_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
   cellsPos = names(art_tcells[art_tcells]),
@@ -512,7 +543,7 @@ art_renamingDF <- getCellColData(projART_matched, select = c("haystackOut", "man
   as.data.frame(.) %>%
   mutate(cellNames = projART_matched$cellNames) %>%
   mutate(condensedCluster = case_when(
-    !grepl("Other", manualClusterAnnot) ~ "T cell",
+    grepl("CD4", manualClusterAnnot) ~ "T cell",
     TRUE ~ "Other")) %>%
   mutate(condensedHIVCluster = paste0(condensedCluster, "_", haystackOut))
 
@@ -568,35 +599,137 @@ plotVolcanoFromGetMarkerFeatures(art_markerTest, chromVARmode = TRUE,
 # plotMotifDot(art_markerTest, "art_chromVAR_motifsUp_HIVpos", direction = "positive")
 ```
 
+# qc metrics
 ```{r}
-viralFragGraphTheme <- list(
-  scale_x_continuous(expand = c(0, 0), limits = c(0,NA)),
-  theme_classic(),
-  theme(
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.title.y = element_blank(),
-    panel.grid.major.y = element_line(color = "#DDDDDD80"),
-    strip.background = element_rect(color = "#ffffff", fill = "#ffffff"),
-    strip.text = element_text(size = 10)),
-  labs(x = "Read fragment aligned to provirus (bp)")
-)
-
-haystackInVitro$viralFrags %>%
-  ggplot() +
-  geom_segment(aes(x = startBp, xend = endBp, y = newCbc, yend = newCbc), color = "#FF000050") +
-  viralFragGraphTheme
+tmp <- data.frame(yaxis = getCellColData(projInvitro_matched, "log10(nFrags)")[,1],
+  xaxis = getCellColData(projInvitro_matched, "as.character(haystackOut)")[,1]) %>%
+  mutate(xaxis = factor(xaxis))
 
 
-haystackChronic$viralFrags %>%
+data.frame(yaxis = getCellColData(projInvitro_matched, "log10(nFrags)")[,1],
+  xaxis = getCellColData(projInvitro_matched, "as.character(haystackOut)")[,1]) %>%
+  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
+  geom_violin(aes(fill = xaxis), alpha = 0.4) +
+  geom_boxplot(fill = "#FFFFFF00") +
+  theme_classic() +
+  stat_compare_means(method = "t.test", label.x.npc = 0.5, hjust = 0.5)
+
+
+data.frame(yaxis = getCellColData(projInvitro_matched, "log10(nFrags)")[names(invitro_earlyCells),1],
+  xaxis = getCellColData(projInvitro_matched, "as.character(haystackOut)")[names(invitro_earlyCells),1]) %>%
+  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
+  geom_violin(aes(fill = xaxis), alpha = 0.4) +
+  geom_boxplot(fill = "#FFFFFF00") +
+  theme_classic() +
+  stat_compare_means(method = "t.test", label.x.npc = 0.5, hjust = 0.5)
+
+data.frame(yaxis = getCellColData(projInvitro_matched, "log10(nFrags)")[,1],
+  xaxis = getCellColData(projInvitro_matched, "manualClusterAnnot")[,1]) %>%
+  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
+  geom_violin(aes(fill = xaxis), alpha = 0.4) +
+  geom_boxplot(fill = "#FFFFFF00") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+
+data.frame(yaxis = getCellColData(projInvitro_matched, "TSSEnrichment")[,1],
+  xaxis = getCellColData(projInvitro_matched, "as.character(haystackOut)")[,1]) %>%
+  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
+  geom_violin(aes(fill = xaxis), alpha = 0.4) +
+  geom_boxplot(fill = "#FFFFFF00") +
+  theme_classic() +
+  stat_compare_means(method = "t.test", label.x.npc = 0.5, hjust = 0.5)
+
+haystackChronic$viralFrags[haystackChronic$viralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
   mutate(individual = ifelse(grepl("C01", sample), "C01", "C02")) %>%
-  ggplot() +
-  geom_segment(aes(x = startBp, xend = endBp, y = newCbc, yend = newCbc), color = "#FF000050", size = 2) +
-  facet_grid(individual ~ ., scales = "free_y", space = "free_y") +
-  viralFragGraphTheme
+  group_by(newCbc) %>%
+  summarize(n = n()) %>%
+  mutate(yaxis = getCellColData(projChronic_matched, "TSSEnrichment")[newCbc, ]) %>%
+  ggplot(aes(x = n, y = yaxis)) +
+  geom_point()
+  
+
+data.frame(yaxis = getCellColData(projChronic_matched, "TSSEnrichment")[,1],
+  xaxis = getCellColData(projChronic_matched, "as.character(haystackOut)")[,1]) %>%
+  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
+  geom_violin(aes(fill = xaxis), alpha = 0.4) +
+  geom_boxplot(fill = "#FFFFFF00") +
+  theme_classic() +
+  stat_compare_means(method = "wilcox", label.x.npc = 0.5, hjust = 0.5)
+```
 
 
-# TODO figure out how to plot the frags from ART
-# TODO filter in case some of the cells were filtered out in the cluster filtering...
+
+```{r}
+sumaGeneAnnots <- read.csv("viralGenomeAnnotations/suma.csv") %>%
+  mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
+  mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
+
+inVitroFrags_matched <- haystackInVitro$viralFrags[haystackInVitro$viralFrags$newCbc %in% projInvitro_matched$cellNames, ]
+
+plotFragMultiGraph(frags = inVitroFrags_matched, coverage = rep(0, 9726), geneAnnots = sumaGeneAnnots, fn = "invitro_frags")
+
+inVitroFrags_matched %>%
+  mutate(ltrOnly = (startBp <= 633 & endBp <= 633) | (startBp >= 9092 & endBp <= 9725)) %>%
+  mutate(nonLtrOnly = startBp > 633 & endBp < 9092) %>%
+  mutate(both = !ltrOnly & !nonLtrOnly) %>%
+  summarize(LTRonly = sum(ltrOnly),
+    nonLtrOnly = sum(nonLtrOnly),
+    both = sum(both))
+
+hxb2GeneAnnots <- read.csv("viralGenomeAnnotations/hxb2.csv") %>%
+  mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
+  mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
+
+chronicFrags_matched <- haystackChronic$viralFrags[haystackChronic$viralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
+  mutate(individual = ifelse(grepl("C01", sample), "C01", "C02"))
+
+plotFragMultiGraph(frags = chronicFrags_matched, coverage = rep(0, 9719), geneAnnots = hxb2GeneAnnots, separateByIndividual = TRUE, fn = "chronic_frags", gheight = 5)
+
+haystackChronic$viralFrags[haystackChronic$viralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
+  mutate(ltrOnly = (startBp <= 633 & endBp <= 633) | (startBp >= 9085 & endBp <= 9718)) %>%
+  mutate(nonLtrOnly = startBp > 633 & endBp < 9085) %>%
+  mutate(both = !ltrOnly & !nonLtrOnly) %>%
+  summarize(LTRonly = sum(ltrOnly),
+    nonLtrOnly = sum(nonLtrOnly),
+    both = sum(both))
+
+artFrags_matched <- haystackART$viralFrags[haystackART$viralFrags$newCbc %in% projART_matched$cellNames, ]
+artVirusGeneAnnots <- downloadTables(unique(artFrags_matched$seqname))
+
+checkFragmentOverlap <- function(q1, q2, s1, s2) {
+  if (q1 <= s2 & q1 >= s1) {
+    return(TRUE)
+  } else if (q2 >= s1 & q2 <= s2) {
+    return(TRUE)
+  } else if (s2 >= q1 & s2 <= q2) {
+    return(TRUE)
+  } else if (s1 >= q1 & s1 <= q2) {
+    return(TRUE)
+  }
+  return(FALSE)
+}
+
+sapply(seq_along(artFrags_matched$sample), function(i) {
+  seqname <- artFrags_matched[i, "seqname"]
+  seqnameAnnots <- artVirusGeneAnnots[[seqname]]
+  
+  if (is.null(seqnameAnnots)) {
+    return(NULL)
+  }
+  
+  q1 <- artFrags_matched[i, "startBp"]
+  q2 <- artFrags_matched[i, "endBp"]
+  
+  matches <- sapply(seq_along(seqnameAnnots$annotation), function(i) {
+    s1 <- seqnameAnnots$startPos[i]
+    s2 <- seqnameAnnots$endPos[i]
+    
+    return(checkFragmentOverlap(q1, q2, s1, s2))
+  })
+  
+  return(seqnameAnnots$annotation[matches])
+})
+# TODO need to add...LTR sequences for some sequences since they're not annotated.
 ```
 
