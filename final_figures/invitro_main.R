@@ -1,14 +1,14 @@
-# library(ggplot2)
-# library(patchwork)
+source("defaultFigureSettings.R")
 
-figA <- readRDS("outs/rds/InVitro_umap_labeledCluster_noPlotLabels.rds") + ggtitle("a")
-figB <- readRDS("outs/rds/InVitro_umap_haystackOut.rds") + ggtitle("b")
-figC <- readRDS("outs/rds/inVitro_discreteAbsolute_matched.rds") + ggtitle("c")
-figD <- readRDS("outs/rds/inVitro_discreteHivOnly_matched.rds") + ggtitle("d")
-figE <- readRDS("outs/rds/invitro_lollipop.rds") + ggtitle("e")
-figF <- readRDS("outs/rds/invitro_peaks_volcano_activatedHIV.rds") + ggtitle("f")
-figG <- readRDS("outs/rds/invitro_motifsUp_activatedHIVneg.rds") + ggtitle("g")
-figH <- readRDS("outs/rds/invitro_motifsUp_activatedHIVpos.rds") + ggtitle("h")
+figA <- readRDS("../outs/rds/InVitro_umap_labeledCluster_noPlotLabels.rds") + ggtitle("a")
+figB <- readRDS("../outs/rds/InVitro_umap_haystackOut.rds") + ggtitle("b")
+figC <- readRDS("../outs/rds/inVitro_discreteAbsolute_matched.rds") + ggtitle("c")
+figD <- readRDS("../outs/rds/inVitro_discreteHivOnly_matched.rds") + ggtitle("d")
+figE <- readRDS("../outs/rds/invitro_lollipop.rds") + ggtitle("e")
+figF <- readRDS("../outs/rds/invitro_peaks_volcano_activatedHIV.rds") + ggtitle("f")
+figG <- readRDS("../outs/rds/invitro_motifsUp_activatedHIVneg.rds") + ggtitle("g")
+figH <- readRDS("../outs/rds/invitro_motifsUp_activatedHIVpos.rds") + ggtitle("h")
+legIndicator <- readPNG("../final_figures/asapseq_legend_photos/1 - invitro.png", native = TRUE)
 
 a_legend <- as_ggplot(get_legend(figA + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1)) +
@@ -23,14 +23,8 @@ b_legend <- as_ggplot(get_legend(figB +
       legend.box.margin=margin(-10,-10,-10,-10),
       legend.justification = "left")))
 
-umapPlotTheme <- theme(
-  legend.position = "none",
-  axis.ticks = element_blank(),
-  axis.text = element_blank()
-)
-
-figA <- figA + umapPlotTheme
-figB <- figB + umapPlotTheme
+figA <- figA + umapPlotThemeNoLeg
+figB <- figB + umapPlotThemeNoLeg
 
 layout <- c(
   area(1, 1, 3, 3), #a
@@ -44,18 +38,12 @@ layout <- c(
   area(7, 5, 8, 6) #h
 )
 
-subplotTheme <- theme(
-  plot.title.position = "plot",
-  plot.title = element_text(size = 12, margin = margin(0,0,0,0)),
-  plot.margin = unit(c(0,0,0,0), "pt"),
-  text = element_text(family = "Arial"),
-  rect = element_rect(fill = "transparent", colour = NULL)
-)
 
 p <- wrap_elements(figA + subplotTheme) +
   wrap_elements(figB + subplotTheme) + 
   wrap_elements((a_legend + subplotTheme + theme(plot.margin = unit(c(10, 0, 0, 30), "pt"))) / 
-      (b_legend + subplotTheme + theme(plot.margin = unit(c(0, 0, 40, 30), "pt")))) +
+      (b_legend + subplotTheme + theme(plot.margin = unit(c(0, 0, 40, 30), "pt")))) + 
+  inset_element(p = legIndicator, left = 0.7, right = 1, top = 1, bottom = 0.8, clip = FALSE, align_to = "full") +
   wrap_elements(figC + subplotTheme) +
   wrap_elements(figD + subplotTheme + theme(plot.margin = unit(c(0, 0, 0, 10), "pt"))) +
   wrap_elements(figE + subplotTheme) +
@@ -64,5 +52,5 @@ p <- wrap_elements(figA + subplotTheme) +
   wrap_elements(figH + subplotTheme) +
   plot_layout(design = layout)
 
-ggsave(filename = "outs/pdf/fig2.pdf", device = cairo_pdf, plot = p, width = 8, height = 8, units = "in")
+ggsave(filename = "../outs/pdf/fig2.pdf", device = cairo_pdf, plot = p, width = 8, height = 8, units = "in")
 

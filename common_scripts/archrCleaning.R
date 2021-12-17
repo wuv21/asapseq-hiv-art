@@ -53,7 +53,7 @@ addHaystackData <- function(proj, haystackParentDir, haystackSamples) {
   
   proj$haystackOut <- haystackOut
   
-  return(list(newProj = proj, viralFrags = haystackPosCellsViralFrags))
+  return(list(newProj = proj, allViralFrags = haystackDf, filteredviralFrags = haystackPosCellsViralFrags))
 }
 
 ######

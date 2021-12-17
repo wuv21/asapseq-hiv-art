@@ -554,3 +554,102 @@ plotFragMultiGraph <- function(
   savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }
 
+plotArchRQCData <- function(
+  proj,
+  fn,
+  xcol = "as.character(haystackOut)",
+  ycol,
+  xlbl = NULL,
+  ylbl = ycol,
+  gwidth = 3,
+  gheight = 3,
+  devices = c("png", "rds")
+) {
+  df <- data.frame(yaxis = getCellColData(proj, ycol)[,1],
+    xaxis = getCellColData(proj, xcol)[,1])
+  
+  if (xcol == "as.character(haystackOut)") {
+    df <- df %>%
+      mutate(xaxis = ifelse(xaxis, "HIV+", "HIV-"))
+  }
+  
+  g <- ggplot(df, aes(x = xaxis, y = yaxis, color = xaxis)) +
+    geom_violin(aes(fill = xaxis), alpha = 0.4) +
+    geom_boxplot(fill = "#FFFFFF00", outlier.size = 0.8) +
+    theme_classic() +
+    labs(y = ylbl) +
+    theme(legend.position = "none",
+      axis.text = element_text(size = BASEPTFONTSIZE, family = "Arial"),
+      axis.title = element_text(size = BASEPTFONTSIZE, family = "Arial"),
+      axis.title.x = element_blank())
+  
+  if (xcol == "as.character(haystackOut)") {
+    g <- g + 
+      stat_compare_means(method = "t.test", label.x.npc = 0.5, hjust = 0.5, size = BASEFONTSIZE, label = "p.format") +
+      scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
+      scale_fill_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR))
+  }
+  
+  savePlot(plot = g, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}
+
+plotUpsetCBC <- function(
+  atacCBC,
+  hivCBC,
+  adtCBC,
+  fn,
+  gheight = 2.5,
+  gwidth = 2.5,
+  devices = c("png", "rds")
+) {
+  df <- data.frame(
+    cbc = c(atacCBC, hivCBC, adtCBC),
+    modal = c(rep("ATAC", length(atacCBC)), rep("HIV", length(hivCBC)), rep("ADT", length(adtCBC))),
+    value = TRUE
+  )
+  
+  df <- df %>%
+    pivot_wider(id_cols = cbc, names_from = modal, values_from = value) %>%
+    group_by(ATAC, HIV, ADT) %>%
+    summarize(n = n()) %>%
+    ungroup() %>%
+    mutate(rowID = factor(row_number()))
+  
+  barPlot <- df %>%
+    ggplot(aes(x = rowID, y = n)) +
+    geom_bar(stat = "identity", width = 0.5, fill = "#000000") +
+    geom_text(aes(label = n), nudge_y = 250, size = BASEFONTSIZE) +
+    scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+    coord_cartesian(clip = "off") +
+    labs(y = "Count") +
+    theme_classic() +
+    theme(
+      axis.text = element_text(size = BASEPTFONTSIZE),
+      axis.title.y = element_text(size = BASEPTFONTSIZE),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.title.x = element_blank())
+  
+  axisPlot <- df %>%
+    dplyr::select(-n) %>%
+    pivot_longer(cols = c(ATAC, HIV, ADT), names_to = "modals", values_to = "presence") %>%
+    mutate(lineGroup = ifelse(is.na(presence), paste(rowID, modals, NA), rowID)) %>%
+    mutate(colorGroup = ifelse(is.na(presence), "#CCCCCC", "#000000")) %>%
+    ggplot(aes(x = rowID, y = modals)) +
+    geom_point(aes(color = colorGroup), size = 3) +
+    geom_line(aes(group = lineGroup)) +
+    theme_classic() +
+    theme(axis.line = element_blank(),
+      axis.title = element_blank(),
+      axis.text = element_text(size = BASEPTFONTSIZE),
+      axis.text.x = element_blank(),
+      axis.ticks = element_blank(),
+      panel.grid.major.y = element_line(size = 7, color = "#EFEFEF80")) +
+    scale_y_discrete(expand = c(0, 0)) +
+    scale_color_identity() +
+    coord_cartesian(clip = "off")
+  
+  p <- barPlot / axisPlot + plot_layout(heights = c(5, 1)) & theme(axis.text = element_text(family = "Arial"))
+  
+  savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}

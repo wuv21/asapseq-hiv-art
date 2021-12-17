@@ -61,7 +61,7 @@ projART <- loadArchRProject(path = "A08A01_qcfiltTSS8/", showLogo = FALSE)
 # add haystack data
 uniqSamples <- unique(projART$Sample)
 haystackSamplePairingART <- sapply(uniqSamples, function(i) {
-  newSampleName <- ifelse(grepl("A01", i), paste0(i, "_v3WithEnv"), paste0(i, "_v3"))
+  newSampleName <- ifelse(grepl("A01", i), paste0(i, "_v3WithEnv_filtered"), paste0(i, "_v3"))
   return(newSampleName)
 })
 
@@ -187,22 +187,22 @@ adtChronic_matched$atacClusters <- projChronic_matched$Clusters2
 adtART_matched$atacClusters <- projART_matched$Clusters2
 
 projInvitro_matched <- addImputeWeights(projInvitro_matched)
-getBaseATACPanel(projInvitro_matched, "outs/png/invitro_imputePanel.png", embedding = "UMAP2")
+getBaseATACPanel(projInvitro_matched, "invitro_imputePanel", embedding = "UMAP2")
 getBasePanelAndMarkers(seu = adtInVitro_matched, tsa_catalog = tsa_catalog, featuresToUse = inVitroAdtToUse,
   findMarkerMethod = "wilcox",
-  pngFn = "outs/png/InVitro_basepanel.png", tsvFn = "outs/tsv/InVitro_initClusterMarkers.tsv")
+  plotFn = "InVitro_basepanel", tsvFn = "outs/tsv/InVitro_initClusterMarkers.tsv")
 
 projChronic_matched <- addImputeWeights(projChronic_matched)
-getBaseATACPanel(projChronic_matched, "outs/png/chronic_imputePanel.png", embedding = "UMAP2")
+getBaseATACPanel(projChronic_matched, "chronic_imputePanel", embedding = "UMAP2")
 getBasePanelAndMarkers(seu = adtChronic_matched, tsa_catalog = tsa_catalog, featuresToUse = chronicAdtToUse,
   findMarkerMethod = "wilcox",
-  pngFn = "outs/png/chronic_basepanel.png", tsvFn = "outs/tsv/chronic_initClusterMarkers.tsv")
+  plotFn = "chronic_basepanel", tsvFn = "outs/tsv/chronic_initClusterMarkers.tsv")
 
 projART_matched <- addImputeWeights(projART_matched)
-getBaseATACPanel(projART_matched, "outs/png/art_imputePanel.png", embedding = "UMAP2")
+getBaseATACPanel(projART_matched, "art_imputePanel", embedding = "UMAP2")
 getBasePanelAndMarkers(seu = adtART_matched, tsa_catalog, featuresToUse = ARTAdtToUse,
   findMarkerMethod = "wilcox",
-  pngFn = "outs/png/art_basepanel.png", tsvFn = "outs/tsv/art_initClusterMarkers.tsv")
+  plotFn = "art_basepanel", tsvFn = "outs/tsv/art_initClusterMarkers.tsv")
 ```
 
 
@@ -361,7 +361,8 @@ invitro_markerTest_Activated <- getMarkerFeatures(
 )
 
 invitro_markerTest_activatedPeaks <- getMarkers(invitro_markerTest_Activated, cutOff = "FDR < 0.05", returnGR = TRUE)
-invitro_markerTest_activatedPeaks <- hiAnnotator::getNearestFeature(invitro_markerTest_activatedPeaks$Activated_TRUE, getGeneAnnotation(projInvitro_matched_gcPeak)[[1]], colnam = "symbol", feature.colnam = "symbol")
+invitro_markerTest_activatedPeaks <- hiAnnotator::getNearestFeature(invitro_markerTest_activatedPeaks$Activated_TRUE,
+  getGeneAnnotation(projInvitro_matched_gcPeak)[[1]], colnam = "symbol", feature.colnam = "symbol")
 invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_activatedPeaks) %>%
   mutate(direction = ifelse(Log2FC > 0, "HIV+", "HIV-")) %>%
   mutate(piScore = Log2FC * -log10(FDR)) %>%
@@ -601,61 +602,15 @@ plotVolcanoFromGetMarkerFeatures(art_markerTest, chromVARmode = TRUE,
 
 # qc metrics
 ```{r}
-tmp <- data.frame(yaxis = getCellColData(projInvitro_matched, "log10(nFrags)")[,1],
-  xaxis = getCellColData(projInvitro_matched, "as.character(haystackOut)")[,1]) %>%
-  mutate(xaxis = factor(xaxis))
+plotArchRQCData(projInvitro_matched, fn = "invitro_qc_haystack_frags",
+  ycol = "log10(nFrags)", ylbl = "log10(unique fragments)")
 
+plotArchRQCData(projInvitro_matched, fn = "invitro_qc_haystack_TSS", ycol = "TSSEnrichment")
 
-data.frame(yaxis = getCellColData(projInvitro_matched, "log10(nFrags)")[,1],
-  xaxis = getCellColData(projInvitro_matched, "as.character(haystackOut)")[,1]) %>%
-  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
-  geom_violin(aes(fill = xaxis), alpha = 0.4) +
-  geom_boxplot(fill = "#FFFFFF00") +
-  theme_classic() +
-  stat_compare_means(method = "t.test", label.x.npc = 0.5, hjust = 0.5)
-
-
-data.frame(yaxis = getCellColData(projInvitro_matched, "log10(nFrags)")[names(invitro_earlyCells),1],
-  xaxis = getCellColData(projInvitro_matched, "as.character(haystackOut)")[names(invitro_earlyCells),1]) %>%
-  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
-  geom_violin(aes(fill = xaxis), alpha = 0.4) +
-  geom_boxplot(fill = "#FFFFFF00") +
-  theme_classic() +
-  stat_compare_means(method = "t.test", label.x.npc = 0.5, hjust = 0.5)
-
-data.frame(yaxis = getCellColData(projInvitro_matched, "log10(nFrags)")[,1],
-  xaxis = getCellColData(projInvitro_matched, "manualClusterAnnot")[,1]) %>%
-  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
-  geom_violin(aes(fill = xaxis), alpha = 0.4) +
-  geom_boxplot(fill = "#FFFFFF00") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-
-
-data.frame(yaxis = getCellColData(projInvitro_matched, "TSSEnrichment")[,1],
-  xaxis = getCellColData(projInvitro_matched, "as.character(haystackOut)")[,1]) %>%
-  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
-  geom_violin(aes(fill = xaxis), alpha = 0.4) +
-  geom_boxplot(fill = "#FFFFFF00") +
-  theme_classic() +
-  stat_compare_means(method = "t.test", label.x.npc = 0.5, hjust = 0.5)
-
-haystackChronic$viralFrags[haystackChronic$viralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
-  mutate(individual = ifelse(grepl("C01", sample), "C01", "C02")) %>%
-  group_by(newCbc) %>%
-  summarize(n = n()) %>%
-  mutate(yaxis = getCellColData(projChronic_matched, "TSSEnrichment")[newCbc, ]) %>%
-  ggplot(aes(x = n, y = yaxis)) +
-  geom_point()
-  
-
-data.frame(yaxis = getCellColData(projChronic_matched, "TSSEnrichment")[,1],
-  xaxis = getCellColData(projChronic_matched, "as.character(haystackOut)")[,1]) %>%
-  ggplot(., aes(x = xaxis, y = yaxis, color = xaxis)) +
-  geom_violin(aes(fill = xaxis), alpha = 0.4) +
-  geom_boxplot(fill = "#FFFFFF00") +
-  theme_classic() +
-  stat_compare_means(method = "wilcox", label.x.npc = 0.5, hjust = 0.5)
+plotUpsetCBC(atacCBC = projInVitro$cellNames,
+  hivCBC = unique(haystackInVitro$allViralFrags$newCbc),
+  adtCBC = Cells(adtInVitro),
+  fn = "invitro_upset_cbc")
 ```
 
 
@@ -665,7 +620,7 @@ sumaGeneAnnots <- read.csv("viralGenomeAnnotations/suma.csv") %>%
   mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
   mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
 
-inVitroFrags_matched <- haystackInVitro$viralFrags[haystackInVitro$viralFrags$newCbc %in% projInvitro_matched$cellNames, ]
+inVitroFrags_matched <- haystackInVitro$filteredViralFrags[haystackInVitro$filteredViralFrags$newCbc %in% projInvitro_matched$cellNames, ]
 
 plotFragMultiGraph(frags = inVitroFrags_matched, coverage = rep(0, 9726), geneAnnots = sumaGeneAnnots, fn = "invitro_frags")
 
@@ -681,12 +636,12 @@ hxb2GeneAnnots <- read.csv("viralGenomeAnnotations/hxb2.csv") %>%
   mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
   mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
 
-chronicFrags_matched <- haystackChronic$viralFrags[haystackChronic$viralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
+chronicFrags_matched <- haystackChronic$filteredViralFrags[haystackChronic$filteredViralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
   mutate(individual = ifelse(grepl("C01", sample), "C01", "C02"))
 
 plotFragMultiGraph(frags = chronicFrags_matched, coverage = rep(0, 9719), geneAnnots = hxb2GeneAnnots, separateByIndividual = TRUE, fn = "chronic_frags", gheight = 5)
 
-haystackChronic$viralFrags[haystackChronic$viralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
+haystackChronic$filteredViralFrags[haystackChronic$filteredViralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
   mutate(ltrOnly = (startBp <= 633 & endBp <= 633) | (startBp >= 9085 & endBp <= 9718)) %>%
   mutate(nonLtrOnly = startBp > 633 & endBp < 9085) %>%
   mutate(both = !ltrOnly & !nonLtrOnly) %>%
@@ -694,7 +649,7 @@ haystackChronic$viralFrags[haystackChronic$viralFrags$newCbc %in% projChronic_ma
     nonLtrOnly = sum(nonLtrOnly),
     both = sum(both))
 
-artFrags_matched <- haystackART$viralFrags[haystackART$viralFrags$newCbc %in% projART_matched$cellNames, ]
+artFrags_matched <- haystackART$filteredViralFrags[haystackART$filteredViralFrags$newCbc %in% projART_matched$cellNames, ]
 artVirusGeneAnnots <- downloadTables(unique(artFrags_matched$seqname))
 
 checkFragmentOverlap <- function(q1, q2, s1, s2) {

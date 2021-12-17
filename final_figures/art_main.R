@@ -1,5 +1,4 @@
-# library(ggplot2)
-# library(patchwork)
+source("defaultFigureSettings.R")
 
 figA <- readRDS("outs/rds/art_umap_labeledCluster_noPlotLabels.rds") + ggtitle("a")
 figB <- readRDS("outs/rds/art_umap_haystackOut.rds") + ggtitle("b")
@@ -18,14 +17,8 @@ b_legend <- as_ggplot(get_legend(figB +
       legend.margin=margin(0,0,0,0),
       legend.box.margin=margin(-10,-10,-10,-10))))
 
-umapPlotTheme <- theme(
-  legend.position = "none",
-  axis.ticks = element_blank(),
-  axis.text = element_blank()
-)
-
-figA <- figA + umapPlotTheme
-figB <- figB + umapPlotTheme
+figA <- figA + umapPlotThemeNoLeg
+figB <- figB + umapPlotThemeNoLeg
 
 layout <- c(
   area(1, 1, 3, 3), #a
@@ -36,15 +29,6 @@ layout <- c(
   area(4, 7, 8, 9), #e
   area(7, 1, 8, 2)  #f
   # area(7, 3, 9, 7) #g and h
-)
-
-subplotTheme <- theme(
-  plot.title.position = "plot",
-  plot.title = element_text(size = 12, margin = margin(0,0,0,0)),
-  plot.margin = unit(c(0,0,0,0), "pt"),
-  plot.background = element_blank(),
-  text = element_text(family = "Arial"),
-  rect = element_rect(fill = "transparent", colour = NULL)
 )
 
 p <- wrap_elements(figA + subplotTheme) +

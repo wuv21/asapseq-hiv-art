@@ -48,7 +48,8 @@ getBaseATACPanel <- function(
   })
   
   p <- patchwork::wrap_plots(embed2, ncol = 4)
-  ggsave(filename = fn, plot = p, height = 10, width = 8)
+  
+  savePlot(plot = p, fn = fn, devices = c("png", "rds"), gheight = 10, gwidth = 8)
 }
 
 
@@ -56,7 +57,7 @@ getBaseATACPanel <- function(
 getBasePanelAndMarkers <- function(
   seu,
   tsa_catalog,
-  pngFn,
+  plotFn,
   tsvFn,
   featuresToUse = rownames(tsa_catalog[!tsa_catalog$isCtrl, "DNA_ID"]),
   findMarkerMethod = "wilcox",
@@ -127,12 +128,8 @@ getBasePanelAndMarkers <- function(
         plot.title = element_text(size = 8))
   })
   
-  cowplot::save_plot(filename = pngFn,
-    plot = do.call(cowplot::plot_grid, c(list(ncol = 5), baseRidgePlotGrid)),
-    base_height = 8,
-    base_width = 11,
-    bg = "#ffffff",
-    dpi = "retina")
+  p <- do.call(cowplot::plot_grid, c(list(ncol = 5), baseRidgePlotGrid))
+  savePlot(plot = p, fn = plotFn, devices = c("png", "rds"), gheight = 8, gwidth = 11)
 }
 
 # assign manual cluster annotation
