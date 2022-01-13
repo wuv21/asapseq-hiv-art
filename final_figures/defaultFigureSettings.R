@@ -2,11 +2,24 @@ library(ggplot2)
 library(patchwork)
 library(png)
 library(ggpubr)
+library(glue)
 
 subplotTheme <- theme(
   plot.title.position = "plot",
   plot.title = element_text(size = 12, margin = margin(0,0,0,0)),
   plot.margin = unit(c(0,0,0,0), "pt"),
+  panel.background = element_rect(fill = "transparent", colour = NA),
+  plot.background = element_rect(fill = "transparent", colour = NA),
+  text = element_text(family = "Arial"),
+  rect = element_rect(fill = "transparent", colour = NULL)
+)
+
+supplementalLollipopTheme <- theme(
+  plot.title.position = "plot",
+  plot.subtitle = element_text(size = 8, margin = margin(4,0,0,0), hjust = 0.5),
+  plot.margin = unit(c(0,0,0,0), "pt"),
+  panel.background = element_rect(fill = "transparent", colour = NA),
+  plot.background = element_rect(fill = "transparent", colour = NA),
   text = element_text(family = "Arial"),
   rect = element_rect(fill = "transparent", colour = NULL)
 )
@@ -18,9 +31,33 @@ umapPlotThemeNoLeg <- theme(
 )
 
 umapPlotThemeLeg <- theme(
-  legend.position = "none",
+  legend.position = "bottom",
   axis.ticks = element_blank(),
   axis.text = element_blank(),
-  legend.margin=margin(0,0,0,0),
-  legend.box.margin=margin(-10,-10,-10,-10),
+  legend.margin = margin(0,0,0,0)
 )
+
+saveFinalFigure <- function(
+  plot,
+  prefixDir = "../outs",
+  fn,
+  devices = c("png", "pdf"),
+  gheight,
+  gwidth) {
+  
+  if (!is.vector(devices)) {
+    devices <- c(devices)
+  }
+  
+  for (d in devices) {
+    gfn <- glue("{prefixDir}/{d}/{fn}.{d}")
+    
+    if (d == "rds") {
+      saveRDS(plot, gfn)
+    } else if (d == "pdf") {
+      ggsave(gfn, plot = plot, dpi = "retina", device = cairo_pdf, width = gwidth, height = gheight, units = "in")  
+    } else {
+      ggsave(gfn, plot = plot, dpi = "retina", device = d, width = gwidth, height = gheight, units = "in")  
+    }
+  }
+}

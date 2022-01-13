@@ -32,7 +32,7 @@ downloadTables <- function(ids) {
       fn <- glue("viralGenomeAnnotations/{id}.csv")
       
       if (file.exists(fn)) {
-        allTables[id] <- read.csv(fn)
+        allTables[[id]] <- read.csv(fn)
       } else {
         idClean <- gsub("chrA08", "", id)
         featureDf <- getFeatureTable(idClean)

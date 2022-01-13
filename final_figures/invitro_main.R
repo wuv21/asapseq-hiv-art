@@ -8,7 +8,7 @@ figE <- readRDS("../outs/rds/invitro_lollipop.rds") + ggtitle("e")
 figF <- readRDS("../outs/rds/invitro_peaks_volcano_activatedHIV.rds") + ggtitle("f")
 figG <- readRDS("../outs/rds/invitro_motifsUp_activatedHIVneg.rds") + ggtitle("g")
 figH <- readRDS("../outs/rds/invitro_motifsUp_activatedHIVpos.rds") + ggtitle("h")
-legIndicator <- readPNG("../final_figures/asapseq_legend_photos/1 - invitro.png", native = TRUE)
+legIndicator <- readPNG("asapseq_legend_photos/1 - invitro.png", native = TRUE)
 
 a_legend <- as_ggplot(get_legend(figA + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1)) +
@@ -52,5 +52,5 @@ p <- wrap_elements(figA + subplotTheme) +
   wrap_elements(figH + subplotTheme) +
   plot_layout(design = layout)
 
-ggsave(filename = "../outs/pdf/fig2.pdf", device = cairo_pdf, plot = p, width = 8, height = 8, units = "in")
+saveFinalFigure(plot = p, fn = "fig2", devices = c("png", "pdf"), gwidth = 8, gheight = 8)
 

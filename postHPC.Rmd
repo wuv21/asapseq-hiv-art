@@ -14,7 +14,6 @@ suppressMessages(library(ArchR))
 suppressMessages(library(GenomicFeatures))
 suppressMessages(library(rtracklayer))
 library(patchwork)
-# library(UpSetR)
 library(Seurat)
 library(glue)
 library(RColorBrewer)
@@ -25,6 +24,7 @@ source("common_scripts/graphs.R")
 source("common_scripts/archrCleaning.R")
 source("common_scripts/clusterAnnotation.R")
 source("common_scripts/differentialExpression.R")
+source("common_scripts/ncbiSearcher.R")
 ```
 
 ```{r}
@@ -147,7 +147,6 @@ plotUmap(projInvitro_matched,
   labelColors = FALSE,
   fn = "InVitro_umap_haystackOut")
 
-
 plotUmap(projChronic_matched, colorBy = "Clusters2", fn = "chronic_umap_unlabeledCluster", embedding = "UMAP2")
 plotUmap(projChronic_matched,
   colorBy = "haystackOut",
@@ -165,7 +164,6 @@ plotUmap(projART_matched,
   embedding = "UMAP2",
   fn = "art_umap_haystackOut")
 plotUmap(projART_matched, colorBy = "individual", fn = "art_umap_indivdiual", embedding = "UMAP2", devices = "png")
-
 ```
 
 
@@ -178,10 +176,7 @@ ARTIsoSimilar <- returnSimilarToIsotype(tsa_catalog, isoComparisonsART, 0.05, 4)
 inVitroAdtToUse <- returnADTNonSimilar(adtInVitro_matched, tsa_catalog, inVitroIsoSimilar)
 chronicAdtToUse <- returnADTNonSimilar(adtChronic_matched, tsa_catalog, chronicIsoSimilar)
 ARTAdtToUse <- returnADTNonSimilar(adtART_matched, tsa_catalog, ARTIsoSimilar)
-```
 
-
-```{r}
 adtInVitro_matched$atacClusters <- projInvitro_matched$Clusters2
 adtChronic_matched$atacClusters <- projChronic_matched$Clusters2
 adtART_matched$atacClusters <- projART_matched$Clusters2
@@ -299,6 +294,14 @@ invitro_activeLate_markers <- findHIVDifferentialMarkers(
 
 makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_activeLate")
 
+plotVlnEnhanced(adtInVitro_matched, cells = names(invitro_activeLaterCells),
+  feats = invitro_activeLate_markers$gene,
+  xVar = "haystackOut",
+  showAggregate = FALSE,
+  separator = invitro_activeLate_markers$Status,
+  titles = invitro_activeLate_markers$cleanName,
+  fn = "invitro_activated_vln")
+
 invitro_earlyCells <- adtInVitro_matched$haystackOut[grepl("(Tcm|early)", adtInVitro_matched$manualClusterAnnot) & invitro_tcells_check]
 invitro_early_markers <- findHIVDifferentialMarkers(
   seu = adtInVitro_matched,
@@ -342,10 +345,22 @@ if (!dir.exists(invitroGcPeakFn)) {
   )
   
   projInvitro_matched <- addPeakMatrix(projInvitro_matched, force = TRUE)
+  projInvitro_matched <- addMotifAnnotations(ArchRProj = projInvitro_matched,
+    motifSet = "cisbp",
+    name = "Motif",
+    force = TRUE)
+  
+  projInvitro_matched <- addBgdPeaks(projInvitro_matched)
+  projInvitro_matched <- addDeviationsMatrix(
+    ArchRProj = projInvitro_matched, 
+    peakAnnotation = "Motif",
+    force = TRUE
+  )
+
   projInvitro_matched_gcPeak <- saveArchRProject(projInvitro_matched,
     outputDirectory = invitroGcPeakFn)
 } else {
-  projInvitro_matched_gcPeak <- loadArchRProject(invitroGCPeakFn, force = TRUE, showLogo = FALSE)
+  projInvitro_matched_gcPeak <- loadArchRProject(invitroGcPeakFn, force = TRUE, showLogo = FALSE)
 }
 
 invitro_markerTest_Activated <- getMarkerFeatures(
@@ -367,7 +382,7 @@ invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_acti
   mutate(direction = ifelse(Log2FC > 0, "HIV+", "HIV-")) %>%
   mutate(piScore = Log2FC * -log10(FDR)) %>%
   group_by(direction) %>%
-  slice_max(order_by = abs(piScore), n = 10) %>%
+  slice_max(order_by = abs(piScore), n = 15) %>%
   arrange(abs(piScore), .by_group = TRUE) %>%
   mutate(symbol2 = glue("{symbol} ({symbolDist})")) %>%
   mutate(symbol2 = factor(symbol2, levels = symbol2)) %>%
@@ -385,17 +400,11 @@ invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_acti
   coord_cartesian(clip = "off") +
   facet_wrap(~ direction, scales = "free")
 
+savePlot(invitro_markerTest_activatedPeaks_topPeaks, fn = "invitro_markerTest_activated_topPeaks", devices = c("png", "rds"), gheight = 3.5, gwidth = 7)
 ggsave("outs/png/invitro_markerTest_activated_topPeaks.png", dpi = "retina", height = 3.5, width = 7)
-
-
 
 plotVolcanoFromGetMarkerFeatures(invitro_markerTest_Activated,
   fn = "invitro_peaks_volcano_activatedHIV")
-
-projInvitro_matched_gcPeak <- addMotifAnnotations(ArchRProj = projInvitro_matched_gcPeak,
-  motifSet = "cisbp",
-  name = "Motif",
-  force = TRUE)
 
 motifsUp <- peakAnnoEnrichment(
   seMarker = invitro_markerTest_Activated,
@@ -411,6 +420,61 @@ motifsDown <- peakAnnoEnrichment(
 
 plotMotifRank(motifsDown, "invitro_motifsUp_activatedHIVneg", color = HIVNEGCOLOR)
 plotMotifRank(motifsUp, "invitro_motifsUp_activatedHIVpos", color = HIVPOSCOLOR)
+
+
+plotVolcanoFromGetMarkerFeatures(invitro_markerTest_tcm_activated,
+  fn = "invitro_peaks_volcano_tcmActivatedHIV")
+
+invitro_markerTest_tcm <- getMarkerFeatures(
+  ArchRProj = projInvitro_matched_gcPeak, 
+  useMatrix = "PeakMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "Tcm_TRUE",
+  bgdGroups = "Tcm_FALSE",
+  maxCells = 1000,
+  verbose = FALSE
+)
+
+plotVolcanoFromGetMarkerFeatures(invitro_markerTest_tcm,
+  fn = "invitro_peaks_volcano_tcmHIV")
+
+# chromVAR analysis
+invitro_chromvar_markerTest <- getMarkerFeatures(
+  ArchRProj = projInvitro_matched_gcPeak,
+  useMatrix = "MotifMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "Activated_TRUE",
+  bgdGroups = "Activated_FALSE",
+  maxCells = 1000,
+  verbose = FALSE,
+  useSeqnames = "deviations"
+)
+
+plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest, chromVARmode = TRUE,
+  fn = "invitro_volcano_motifs_chromVAR")
+
+plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHIVneg", direction = "negative")
+plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHIVpos", direction = "positive")
+
+invitro_chromvar_markerTest_tcm <- getMarkerFeatures(
+  ArchRProj = projInvitro_matched_gcPeak,
+  useMatrix = "MotifMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "Tcm_TRUE",
+  bgdGroups = "Tcm_FALSE",
+  maxCells = 1000,
+  verbose = FALSE,
+  useSeqnames = "deviations"
+)
+
+plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest_tcm, chromVARmode = TRUE,
+  fn = "invitro_volcano_motifs_chromVAR_tcm")
 ```
 
 
@@ -425,6 +489,12 @@ chronic_markers <- findHIVDifferentialMarkers(seu = adtChronic_matched,
   findMarkerMethod = "DESeq2",
   tsa_catalog = tsa_catalog)
 
+plotVlnEnhanced(adtChronic_matched, cells = names(chronic_tcells),
+  feats = chronic_markers$gene,
+  separator = chronic_markers$Status,
+  titles = chronic_markers$cleanName,
+  fn = "chronic_tcells_vln")
+
 makeDifferentialLollipop(chronic_markers, "chronic_lollipop")
  
 chronic_tfh_cells <- adtChronic_matched$haystackOut[grepl("(CD4 Tfh)", adtChronic_matched$manualClusterAnnot)]
@@ -436,8 +506,13 @@ chronic_tfh_markers <- findHIVDifferentialMarkers(
   findMarkerMethod = "DESeq2",
   featuresToUse = chronicAdtToUse)
 
-makeDifferentialLollipop(invitro_activeLate_markers, "chronic_lollipop_tfh")
+makeDifferentialLollipop(chronic_tfh_markers, "chronic_lollipop_tfh")
 
+plotVlnEnhanced(adtChronic_matched, cells = names(chronic_tfh_cells),
+  feats = chronic_tfh_markers$gene,
+  separator = chronic_tfh_markers$Status,
+  titles = chronic_tfh_markers$cleanName,
+  fn = "chronic_tfh_vln")
 
 chronicGcPeakFn <- paste0(getOutputDirectory(projChronic_matched), "_gcPeakCalled")
 if (!dir.exists(chronicGcPeakFn)) {
@@ -557,7 +632,8 @@ projART_matched <- addCellColData(ArchRProj = projART_matched,
 projART_matched <- addGroupCoverages(ArchRProj = projART_matched,
   groupBy = "condensedHivCluster",
   minReplicates = 2,
-  minCells = 20,
+  minCells = 15,
+  sampleRatio = 0.95,
   force = TRUE)
 
 projART_matched <- addReproduciblePeakSet(
@@ -595,61 +671,93 @@ art_markerTest <- getMarkerFeatures(
 
 plotVolcanoFromGetMarkerFeatures(art_markerTest, chromVARmode = TRUE,
   fn = "art_volcano_motifs_chromVAR")
-
-# plotMotifDot(art_markerTest, "art_chromVAR_motifsUp_HIVneg", direction = "negative")
-# plotMotifDot(art_markerTest, "art_chromVAR_motifsUp_HIVpos", direction = "positive")
 ```
 
 # qc metrics
 ```{r}
-plotArchRQCData(projInvitro_matched, fn = "invitro_qc_haystack_frags",
+invitro_qc_nfrags <- plotArchRQCData(projInvitro_matched, fn = "invitro_qc_haystack_frags",
   ycol = "log10(nFrags)", ylbl = "log10(unique fragments)")
-
-plotArchRQCData(projInvitro_matched, fn = "invitro_qc_haystack_TSS", ycol = "TSSEnrichment")
+invitro_qc_nfrags %>%
+  group_by(xaxis) %>%
+  summarize(avg = mean(yaxis), 
+    sd = stats::sd(yaxis))
+  
+invitro_qc_tss <- plotArchRQCData(projInvitro_matched, fn = "invitro_qc_haystack_TSS", ycol = "TSSEnrichment")
+invitro_qc_tss %>%
+  group_by(xaxis) %>%
+  summarize(avg = mean(yaxis), 
+    sd = stats::sd(yaxis))
 
 plotUpsetCBC(atacCBC = projInVitro$cellNames,
   hivCBC = unique(haystackInVitro$allViralFrags$newCbc),
   adtCBC = Cells(adtInVitro),
   fn = "invitro_upset_cbc")
+
+chronic_qc_nfrags <- plotArchRQCData(projChronic_matched, fn = "chronic_qc_haystack_frags",
+  ycol = "log10(nFrags)", ylbl = "log10(unique fragments)")
+chronic_qc_nfrags %>%
+  group_by(xaxis) %>%
+  summarize(avg = mean(yaxis), 
+    sd = stats::sd(yaxis))
+  
+
+chronic_qc_tss <- plotArchRQCData(projChronic_matched, fn = "chronic_qc_haystack_TSS", ycol = "TSSEnrichment")
+chronic_qc_tss %>%
+  group_by(xaxis) %>%
+  summarize(avg = mean(yaxis), 
+    sd = stats::sd(yaxis))
+
+plotUpsetCBC(atacCBC = projChronic$cellNames,
+  hivCBC = unique(haystackChronic$allViralFrags$newCbc),
+  adtCBC = Cells(adtChronic),
+  fn = "chronic_upset_cbc")
 ```
 
-
-
+# LTR vs internal coverage
 ```{r}
+calculateLTRVersusInternal <- function(frags, ltr5End, ltr3Start, ltr3End) {
+  df <- frags %>%
+    mutate(ltrOnly = (startBp <= ltr5End & endBp <= ltr5End) | (startBp >= ltr3Start & endBp <= ltr3End)) %>%
+    mutate(internalOnly = startBp > ltr5End & endBp < ltr3Start) %>%
+    mutate(both = !ltrOnly & !internalOnly) %>%
+    summarize(LTRonly = sum(ltrOnly),
+      internalOnly = sum(internalOnly),
+      both = sum(both)) %>%
+    pivot_longer(everything(), names_to = "metric", values_to = "n") %>%
+    mutate(prop = round(n / sum(n), digits = 2))
+  
+  return(df)
+}
+
 sumaGeneAnnots <- read.csv("viralGenomeAnnotations/suma.csv") %>%
   mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
   mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
 
-inVitroFrags_matched <- haystackInVitro$filteredViralFrags[haystackInVitro$filteredViralFrags$newCbc %in% projInvitro_matched$cellNames, ]
+inVitroFrags_matched <- haystackInVitro$filteredviralFrags[haystackInVitro$filteredviralFrags$newCbc %in% projInvitro_matched$cellNames, ]
 
 plotFragMultiGraph(frags = inVitroFrags_matched, coverage = rep(0, 9726), geneAnnots = sumaGeneAnnots, fn = "invitro_frags")
+calculateLTRVersusInternal(inVitroFrags_matched, 632, 9093, 9725)
 
-inVitroFrags_matched %>%
-  mutate(ltrOnly = (startBp <= 633 & endBp <= 633) | (startBp >= 9092 & endBp <= 9725)) %>%
-  mutate(nonLtrOnly = startBp > 633 & endBp < 9092) %>%
-  mutate(both = !ltrOnly & !nonLtrOnly) %>%
-  summarize(LTRonly = sum(ltrOnly),
-    nonLtrOnly = sum(nonLtrOnly),
-    both = sum(both))
+# inVitroFrags_matched %>%
+#   group_by(newCbc) %>%
+#   distinct(readname) %>%
+#   dplyr::summarize(totalUniq = n()) %>%
+#   left_join(invitro_qc_nfrags, by = c("newCbc" = "cell")) %>%
+#   ggplot(aes(x = totalUniq, y = 10 ** yaxis)) +
+#   geom_point() +
+#   stat_smooth(method = "lm", formula = y ~ x)
 
 hxb2GeneAnnots <- read.csv("viralGenomeAnnotations/hxb2.csv") %>%
   mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
   mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
 
-chronicFrags_matched <- haystackChronic$filteredViralFrags[haystackChronic$filteredViralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
+chronicFrags_matched <- haystackChronic$filteredviralFrags[haystackChronic$filteredviralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
   mutate(individual = ifelse(grepl("C01", sample), "C01", "C02"))
 
-plotFragMultiGraph(frags = chronicFrags_matched, coverage = rep(0, 9719), geneAnnots = hxb2GeneAnnots, separateByIndividual = TRUE, fn = "chronic_frags", gheight = 5)
+plotFragMultiGraph(frags = chronicFrags_matched, coverage = rep(0, 9719), geneAnnots = hxb2GeneAnnots, separateByIndividual = TRUE, fn = "chronic_frags", gheight = 6)
+calculateLTRVersusInternal(chronicFrags_matched, 633, 9085, 9718)
 
-haystackChronic$filteredViralFrags[haystackChronic$filteredViralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
-  mutate(ltrOnly = (startBp <= 633 & endBp <= 633) | (startBp >= 9085 & endBp <= 9718)) %>%
-  mutate(nonLtrOnly = startBp > 633 & endBp < 9085) %>%
-  mutate(both = !ltrOnly & !nonLtrOnly) %>%
-  summarize(LTRonly = sum(ltrOnly),
-    nonLtrOnly = sum(nonLtrOnly),
-    both = sum(both))
-
-artFrags_matched <- haystackART$filteredViralFrags[haystackART$filteredViralFrags$newCbc %in% projART_matched$cellNames, ]
+artFrags_matched <- haystackART$filteredviralFrags[haystackART$filteredviralFrags$newCbc %in% projART_matched$cellNames, ]
 artVirusGeneAnnots <- downloadTables(unique(artFrags_matched$seqname))
 
 checkFragmentOverlap <- function(q1, q2, s1, s2) {
@@ -686,5 +794,76 @@ sapply(seq_along(artFrags_matched$sample), function(i) {
   return(seqnameAnnots$annotation[matches])
 })
 # TODO need to add...LTR sequences for some sequences since they're not annotated.
+```
+
+# get numbers for manuscript
+```{r}
+# iv total cells
+length(projInvitro_matched$cellNames)
+
+# iv count HIV+
+table(projInvitro_matched$haystackOut)
+
+# iv percent HIV+
+round(table(projInvitro_matched$haystackOut) / length(projInvitro_matched$haystackOut) * 100, digits = 1)
+
+# iv percent annot HIV+ were activated/effector
+round(length(projInvitro_matched_gcPeak$manualClusterAnnot[projInvitro_matched_gcPeak$haystackOut &
+    grepl("Activated", projInvitro_matched_gcPeak$manualClusterAnnot)]) / sum(projInvitro_matched_gcPeak$haystackOut) * 100,
+  digits = 1)
+
+# iv percent annot HIV+ were CD4 that were not activated/effector
+round(length(projInvitro_matched_gcPeak$manualClusterAnnot[projInvitro_matched_gcPeak$haystackOut &
+    grepl("CD4 (Naive|T)", projInvitro_matched_gcPeak$manualClusterAnnot)]) / sum(projInvitro_matched_gcPeak$haystackOut) * 100,
+  digits = 1)
+
+# iv percent annot HIV+ were mono
+round(length(projInvitro_matched_gcPeak$manualClusterAnnot[projInvitro_matched_gcPeak$haystackOut &
+    grepl("Monocyte", projInvitro_matched_gcPeak$manualClusterAnnot)]) / sum(projInvitro_matched_gcPeak$haystackOut) * 100,
+  digits = 1)
+
+
+### CHRONIC
+# chronic percent total cells
+table(projChronic_matched$individual)
+
+# chronic count HIV+
+table(projChronic_matched$individual, projChronic_matched$haystackOut)
+
+# chronic percent HIV+
+tmp <- table(projChronic_matched$individual, projChronic_matched$haystackOut) 
+round(tmp / rowSums(tmp) * 100, digits = 2)
+
+# chronic total
+round(table(projChronic_matched$haystackOut) / length(projChronic_matched$cellNames) * 100, digits = 2)
+
+# chronic percent is memory cd4
+length(projChronic_matched$manualClusterAnnot[grepl("^CD4", projChronic_matched$manualClusterAnnot)]) / length(projChronic_matched$cellNames) * 100
+
+# percent of all clusters
+table(projChronic_matched$manualClusterAnnot) / length(projChronic_matched$cellNames) * 100
+
+# percent HIV+ in Trm or Tcm
+length(projChronic_matched$manualClusterAnnot[grepl("(Trm|Tcm)", projChronic_matched$manualClusterAnnot) & projChronic_matched$haystackOut]) / length(projChronic_matched$manualClusterAnnot[projChronic_matched$haystackOut])
+
+
+### ART
+# art percent total cells
+table(projART_matched$individual)
+
+# art count HIV+
+tmp <- table(projART_matched$individual, projART_matched$haystackOut)
+
+# art percent HIV+
+round(tmp / rowSums(tmp) * 100, digits = 2)
+
+# art total
+length(projART_matched$cellNames)
+
+# art total
+table(projART_matched$haystackOut)
+
+# art percent total
+round(table(projART_matched$haystackOut) / length(projART_matched$cellNames) * 100, digits = 2)
 ```
 

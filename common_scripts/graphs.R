@@ -1,3 +1,5 @@
+library(gghalves)
+
 ######
 # COLOR SCHEMES
 ######
@@ -8,7 +10,7 @@ BASEPTFONTSIZE <- 7
 BASEFONTSIZE <- BASEPTFONTSIZE / ggplot2:::.pt
 
 
-savePlot <- function(plot, fn, devices, gheight, gwidth, scale = 1) {
+savePlot <- function(plot, fn, devices, gheight, gwidth, rdsPlot = NULL, scale = 1) {
   if (!is.vector(devices)) {
     devices <- c(devices)
   }
@@ -16,8 +18,10 @@ savePlot <- function(plot, fn, devices, gheight, gwidth, scale = 1) {
   for (d in devices) {
     gfn <- glue("outs/{d}/{fn}.{d}")
     
-    if (d == "rds") {
-      saveRDS(plot, gfn)
+    if (d == "rds" & !is.null(rdsPlot)) {
+      saveRDS(rdsPlot, gfn)
+    } else if (d == "rds") {
+      saveRDS(rds, gfn)
     } else {
       ggsave(gfn, plot = plot, dpi = "retina", device = d, width = gwidth, height = gheight, scale = scale)  
     }
@@ -170,7 +174,7 @@ plotDiscreteLollipop <- function(proj,
           geom_point(aes(x = n, color = hivPos), size = 1, position = position_dodge(0.8)) + 
           labs(y = "Cluster",
             x = "Number of cells") +
-          geom_text(aes(x = n + max(.$n) * 0.05, label = n, color = hivPos),
+          geom_text(aes(x = n + max(n) * 0.05, label = n, color = hivPos),
             position = position_dodge(0.8),
             vjust = 0.5,
             hjust = 0,
@@ -205,6 +209,110 @@ plotDiscreteLollipop <- function(proj,
   }
   
   savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}
+
+plotVlnEnhanced <- function(
+  seu,
+  cells,
+  feats,
+  titles,
+  fn,
+  colorVar = "haystackOut",
+  xVar = "individual",
+  separator = NULL,
+  showAggregate = TRUE,
+  ncols = 5) {
+  
+  df <- data.frame(
+    x = FetchData(seu, cells = cells, vars = xVar)[, 1],
+    colorData = FetchData(seu, cells = cells, vars = colorVar)[, 1]
+  )
+  
+  titleDict <- titles
+  names(titleDict) <- feats
+  
+  df[, feats] <- t(seu@assays$tsa@data[feats, cells])
+  df <- df %>%
+    pivot_longer(cols = all_of(feats), names_to = "DNA_ID", values_to = "y") %>%
+    mutate(cleanName = titleDict[DNA_ID]) %>%
+    mutate(cleanName = factor(cleanName, levels = titles))
+  
+  if (!is.null(separator)) {
+    sepDict <- separator
+    names(sepDict) <- feats
+    
+    df <- df %>%
+      mutate(sepData = sepDict[DNA_ID])
+  }
+  
+  if (showAggregate) {
+    origX <- unique(df$x)
+    origNRow <- nrow(df)
+    
+    df <- df %>%
+      slice(c(rep(1:n()), rep(1:n())))
+    
+    df[c((origNRow + 1) : nrow(df)), "x"] <- "Aggr"
+    
+    df$x <- factor(df$x, levels = c(origX, "Aggr"))
+  }
+  
+  manualPalette <- c(HIVNEGCOLOR, HIVPOSCOLOR)
+  halfWidths <- 0.9
+  gSkeleton <- function(d, title, titleColor) {
+    g <- ggplot(d, aes(x = x, y = y)) +
+      geom_half_violin(aes(fill = colorData), color = "#000000", side = "l", width = halfWidths, lwd = 0.3) +
+      geom_half_point(aes(fill = colorData, color = colorData), side = "r", width = halfWidths, size = 0.1, alpha = 0.3) +
+      theme_classic() +
+      theme(panel.grid = element_blank(),
+        legend.position = "none",
+        axis.title = element_blank(),
+        strip.background = element_blank(),
+        axis.text = element_text(size = BASEPTFONTSIZE),
+        plot.title.position = "plot",
+        plot.title = element_text(size = BASEPTFONTSIZE, hjust = 0.5, color = titleColor, margin = margin(0,0,0,0)),
+        strip.text = element_text(size = BASEPTFONTSIZE)) +
+      scale_color_manual(values = manualPalette) +
+      scale_fill_manual(values = manualPalette) +
+      # scale_y_continuous(limits = c(-0.25, NA), expand = expansion(mult = c(0, 0.05))) +
+      labs(y = "Expression level",
+        title = title)
+      
+    
+    # if (length(unique(d$cleanName)) > 1) {
+    #   g <- g + facet_wrap(~ cleanName, ncol = ncols, scales = "free")
+    # }
+    
+    return(g)
+  }
+  
+  separatorDict <- separator
+  names(separatorDict) <- titles
+  gList <- lapply(titles, function(z) {
+    df2 <- df %>%
+      dplyr::filter(cleanName == z)
+    
+    return(gSkeleton(df2, z, ifelse(separatorDict[z] == "HIV-", HIVNEGCOLOR, HIVPOSCOLOR)))
+  })
+  
+  # g <- gSkeleton(df)
+  # g <- ggplot_gtable(ggplot_build(g))
+  # stript <- which(grepl("strip-t", g$layout$name))
+  # 
+  # separatorDict <- separator
+  # names(separatorDict) <- titles
+  # 
+  # for (s in stript) {
+  #   lbl <- g$grobs[[s]]$grobs[[1]]$children[[2]]$children[[1]]$label
+  #   stripColor <- ifelse(separatorDict[lbl] == "HIV-", HIVNEGCOLOR, HIVPOSCOLOR)
+  #   g$grobs[[s]]$grobs[[1]]$children[[2]]$children[[1]]$gp$col <- stripColor
+  # }
+  
+  g <- wrap_plots(gList, ncol = ncols)
+  
+  savePlot(plot = g, rdsPlot = gList, fn = fn, devices = c("rds", "png"),
+    gheight = ceiling(length(feats) / ncols) * (8/ncols),
+    gwidth = ifelse(length(feats) > ncols, 8, 8 / ncols * length(feats)))
 }
 
 
@@ -467,37 +575,81 @@ plotGeneAnnot <- function(geneAnnots) {
   g <- ggplot(geneAnnots, aes(x = startPos, xend = endPos, y = annotation, yend = annotation)) +
     geom_line(aes(group = annotation2), color = "#CCCCCC") +
     geom_segment(size = 1.5) +
-    geom_text(aes(x = (startPos + endPos) / 2, label = annotation), hjust = 0.5, position = position_nudge(y = 0.6), size = 2) +
+    # geom_text(aes(x = (startPos + endPos) / 2, label = annotation), hjust = 0.5, position = position_nudge(y = 0.6), size = 2) +
     scale_x_continuous(expand = c(0, 0), limits = c(0,NA)) +
     coord_cartesian(clip = "off") +
     theme_classic() +
-    theme(axis.text.y = element_blank(),
+    labs(y = "Annotation") +
+    theme(
+      axis.text.y = element_text(size = 6),
       axis.text.x = element_text(size = 6),
       axis.title.x = element_blank(),
       axis.line.y = element_blank(),
       axis.ticks.y = element_blank(),
-      axis.title.y = element_blank())
+      axis.title.y = element_text(size = 6))
   
   return(g)
 }
 
-plotFragDistribution <- function(frags, coverage) {
-  for (i in seq_along(frags$sample)) {
-    start <- frags$startBp[i] + 1
-    end <- frags$endBp[i] + 1
+greaterThanZero <- function(d1, d2) {
+  d2Check <- sapply(d2, function(x) {
+    return(x > 0)
+  })
+  
+  return(d1 + d2Check)
+}
+
+calculateCoverage <- function(frags, coverage, startCol = "startBp", endCol = "endBp") {
+  uniqCbc <- unique(frags$newCbc)
+  cbcCoverage <- vector("list", length(uniqCbc))
+  names(cbcCoverage) <- uniqCbc
+  
+  for (i in seq_along(frags[, 1])) {
+    cbc <- frags$newCbc[i]
+    start <- frags[i, startCol] + 1
+    end <- frags[i, endCol] + 1
     
-    coverage[c(start:end)] <- coverage[c(start:end)] + 1
+    if (is.null(cbcCoverage[[cbc]])) {
+      cbcCoverage[[cbc]] <- coverage
+    }
+    
+    cbcCoverage[[cbc]][c(start:end)] <- cbcCoverage[[cbc]][c(start:end)] + 1
   }
   
-  g <- data.frame(y = coverage / nrow(frags), x = seq(0, length(coverage) - 1)) %>%
-    ggplot(aes(x = x, y = y)) +
-    geom_line() +
+  condensedCoverage <- Reduce(greaterThanZero, cbcCoverage, init = coverage)
+  df <- data.frame(
+    y = condensedCoverage / length(uniqCbc),
+    x = seq(0, length(coverage) - 1)
+  )
+  
+  return(df)
+}
+
+plotFragDistribution <- function(frags, coverage, inferredCoverage) {
+  seqCoverage <- calculateCoverage(frags, coverage)
+  inferredCoverage <- calculateCoverage(as.data.frame(inferredCoverage), coverage, startCol = "inferredStart", endCol = "inferredEnd")
+  
+  df <- bind_rows(list("sequenced" = seqCoverage, "inferred" = inferredCoverage), .id = "coverageType")
+  
+  g <- df %>%
+    ggplot(aes(x = x, y = y, color = coverageType)) +
+    geom_line(size = 0.3) +
     theme_classic() +
     coord_cartesian(clip = "off") +
     scale_x_continuous(expand = c(0, 0), limits = c(0,NA)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(0,NA)) +
+    scale_color_manual(values = c("#1b9e7770", "#d95f0290")) +
+    labs(y = "Prop. of cells") +
     theme(axis.line.y = element_blank(),
       axis.text = element_text(size = 6),
-      axis.title = element_blank())
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      legend.text = element_text(size = 6),
+      legend.key = element_rect(fill = NA, color = NA),
+      legend.background = element_rect(fill = "#ffffff00", color = "#ffffff00"),
+      legend.margin=margin(-1, 0, -1, 0, unit='lines'),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 6))
   
   return(g)
 }
@@ -509,18 +661,30 @@ viralFragGraphTheme <- list(
     axis.line.y = element_blank(),
     axis.text.y = element_blank(),
     axis.ticks.y = element_blank(),
-    axis.title.y = element_blank(),
+    axis.title.y = element_text(size = 6),
     axis.text.x = element_text(size = 6),
     axis.title.x = element_text(size = 6),
-    panel.grid.major.y = element_line(color = "#DDDDDD80"),
+    panel.grid.major.y = element_line(color = "#EEEEEE80"),
     strip.background = element_rect(color = "#ffffff", fill = "#ffffff"),
     strip.text = element_text(size = BASEPTFONTSIZE)),
   labs(x = "Read fragment aligned to provirus (bp)")
 )
 
-plotFragCoverage <- function(frags, separateByIndividual) {
-  g <- ggplot(frags) +
-    geom_segment(aes(x = startBp, xend = endBp, y = newCbc, yend = newCbc), color = "#FF000050")
+plotFragCoverage <- function(frags, inferredCoverage, separateByIndividual) {
+  nCells <- length(unique(frags$newCbc))
+  if (nCells > 100) {
+    lineSize <- 0.1
+  } else if (nCells > 50) {
+    lineSize <- 0.5
+  } else {
+    lineSize <- 1
+  }
+  
+  g <- ggplot(frags, aes(x = startBp, xend = endBp, y = newCbc, yend = newCbc)) +
+    geom_segment(color = "#d95f0290", size = lineSize) +
+    geom_segment(data = inferredCoverage, aes(x = inferredStart, xend = inferredEnd, y = newCbc, yend = newCbc),
+      color = "#1b9e7770", size = lineSize) +
+    labs(y = "Cell")
   
   if (separateByIndividual) {
     g <- g +
@@ -543,12 +707,28 @@ plotFragMultiGraph <- function(
   devices = c("png", "rds")
 ) {
   
+  if (separateByIndividual) {
+    inferredCoverage <- frags %>% 
+      group_by(individual, readname, newCbc)
+  } else {
+    inferredCoverage <- frags %>% 
+      group_by(readname, newCbc)    
+  }
+  
+  inferredCoverage <- inferredCoverage %>%
+    filter(n() == 2) %>%
+    arrange(min(startBp, endBp), .by_group = TRUE) %>%
+    filter(first(endBp) < last(startBp)) %>%
+    summarise(
+      inferredStart = first(endBp) + 1,
+      inferredEnd = last(startBp) - 1)
+  
   annotG <- plotGeneAnnot(geneAnnots)
-  distG <- plotFragDistribution(frags, coverage)
-  fragG <- plotFragCoverage(frags, separateByIndividual)
+  distG <- plotFragDistribution(frags, coverage, inferredCoverage)
+  fragG <- plotFragCoverage(frags, inferredCoverage, separateByIndividual)
   
   p <- fragG / distG / annotG + 
-    plot_layout(heights = c(5, 0.5, 1.5)) & 
+    plot_layout(heights = c(6, 0.5, 0.75)) & 
     theme(text = element_text(family = "Arial"))
   
   savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
@@ -566,7 +746,8 @@ plotArchRQCData <- function(
   devices = c("png", "rds")
 ) {
   df <- data.frame(yaxis = getCellColData(proj, ycol)[,1],
-    xaxis = getCellColData(proj, xcol)[,1])
+    xaxis = getCellColData(proj, xcol)[,1],
+    cell = getCellNames(proj))
   
   if (xcol == "as.character(haystackOut)") {
     df <- df %>%
@@ -585,12 +766,14 @@ plotArchRQCData <- function(
   
   if (xcol == "as.character(haystackOut)") {
     g <- g + 
-      stat_compare_means(method = "t.test", label.x.npc = 0.5, hjust = 0.5, size = BASEFONTSIZE, label = "p.format") +
+      stat_compare_means(method = "t.test", label.x.npc = 0.5, label.y.npc = 0.85, hjust = 0.5, size = BASEFONTSIZE, label = "p.format") +
       scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
       scale_fill_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR))
   }
   
   savePlot(plot = g, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+  
+  return(df)
 }
 
 plotUpsetCBC <- function(
