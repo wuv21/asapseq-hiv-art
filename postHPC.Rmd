@@ -172,6 +172,8 @@ plotUmap(projART_matched,
   bringToTop = TRUE,
   labelColors = FALSE,
   embedding = "UMAP2",
+  propInLegend = TRUE,
+  propDigits = 2,
   fn = "art_umap_haystackOut")
 plotUmap(projART_matched, colorBy = "individual", fn = "art_umap_indivdiual", embedding = "UMAP2", devices = "png")
 ```
@@ -268,7 +270,7 @@ adtART_matched$manualClusterAnnot <- projART_matched$manualClusterAnnot
 adtART_matched$haystackOut <- projART_matched$haystackOut
 
 plotUmap(projART_matched, colorBy = "manualClusterAnnot", fn = "art_umap_labeledCluster", embedding = "UMAP2")
-plotUmap(projART_matched, colorBy = "manualClusterAnnot", fn = "art_umap_labeledCluster_noPlotLabels", labelColors = FALSE, embedding = "UMAP2")
+plotUmap(projART_matched, colorBy = "manualClusterAnnot", fn = "art_umap_labeledCluster_noPlotLabels", labelColors = FALSE, embedding = "UMAP2", propInLegend = TRUE)
 
 plotDiscreteLollipop(projART_matched, "art_discreteAbsolute_matched",
   cluster = "manualClusterAnnot",

@@ -38,8 +38,8 @@ umapPlotThemeLeg <- theme(
 )
 
 umapCleanPlotTheme <- list(
-  scale_x_continuous(expand = c(0.02, 0.02)),
-  scale_y_continuous(expand = c(0.02, 0.02)),
+  scale_x_continuous(expand = expansion(mult = c(0.04, 0.04))),
+  scale_y_continuous(expand = expansion(mult = c(0.04, 0.04))),
   coord_fixed(),
   theme(axis.title = element_text(hjust = 0.02),
     axis.line = element_blank()))

@@ -83,6 +83,7 @@ plotUmap <- function(
   rasterize = TRUE,
   bringToTop = FALSE,
   propInLegend = FALSE,
+  propDigits = 1,
   embedding = "UMAP") {
   
   df <- generateUmapDfFromArchR(proj, cluster = colorBy, embedding = embedding)
@@ -100,7 +101,7 @@ plotUmap <- function(
   if (propInLegend) {
     df <- df %>%
       group_by(cluster) %>%
-      mutate(cluster = glue("{cluster} ({round(n() / nrow(.) * 100, digits = 1)}%)"))
+      mutate(cluster = glue("{cluster} ({round(n() / nrow(.) * 100, digits = propDigits)}%)"))
   }
   
   p1 <- ggplot(df, aes(x = x, y = y))
