@@ -6,7 +6,7 @@ library(glue)
 
 subplotTheme <- theme(
   plot.title.position = "plot",
-  plot.title = element_text(size = 12, margin = margin(0,0,0,0)),
+  plot.title = element_text(size = 12, margin = margin(0,0,0,0), hjust = 0),
   plot.margin = unit(c(0,0,0,0), "pt"),
   panel.background = element_rect(fill = "transparent", colour = NA),
   plot.background = element_rect(fill = "transparent", colour = NA),
@@ -36,6 +36,20 @@ umapPlotThemeLeg <- theme(
   axis.text = element_blank(),
   legend.margin = margin(0,0,0,0)
 )
+
+umapCleanPlotTheme <- list(
+  scale_x_continuous(expand = c(0.02, 0.02)),
+  scale_y_continuous(expand = c(0.02, 0.02)),
+  coord_fixed(),
+  theme(axis.title = element_text(hjust = 0.02),
+    axis.line = element_blank()))
+
+umapArrowSettings <- arrow(length = unit(0.2, "cm"))
+umapArrowSize <- 0.25
+
+wrapNewAnnotLevel <- function(p) {
+  return(p + plot_layout(tag_level = "new"))
+}
 
 saveFinalFigure <- function(
   plot,

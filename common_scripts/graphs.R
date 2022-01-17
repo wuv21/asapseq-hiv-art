@@ -10,7 +10,7 @@ BASEPTFONTSIZE <- 7
 BASEFONTSIZE <- BASEPTFONTSIZE / ggplot2:::.pt
 
 
-savePlot <- function(plot, fn, devices, gheight, gwidth, rdsPlot = NULL, scale = 1) {
+savePlot <- function(plot, fn, devices, gheight, gwidth, rdsPlot = NULL, scale = 1, customSavePlot = NULL) {
   if (!is.vector(devices)) {
     devices <- c(devices)
   }
@@ -21,7 +21,9 @@ savePlot <- function(plot, fn, devices, gheight, gwidth, rdsPlot = NULL, scale =
     if (d == "rds" & !is.null(rdsPlot)) {
       saveRDS(rdsPlot, gfn)
     } else if (d == "rds") {
-      saveRDS(rds, gfn)
+      saveRDS(plot, gfn)
+    } else if (!is.null(customSavePlot)) {
+      ggsave(gfn, plot = customSavePlot, dpi = "retina", device = d, width = gwidth, height = gheight, scale = scale)
     } else {
       ggsave(gfn, plot = plot, dpi = "retina", device = d, width = gwidth, height = gheight, scale = scale)  
     }
@@ -80,6 +82,7 @@ plotUmap <- function(
   labelColors = TRUE,
   rasterize = TRUE,
   bringToTop = FALSE,
+  propInLegend = FALSE,
   embedding = "UMAP") {
   
   df <- generateUmapDfFromArchR(proj, cluster = colorBy, embedding = embedding)
@@ -92,6 +95,12 @@ plotUmap <- function(
   if (colorBy == "haystackOut") {
     df <- df %>%
       mutate(cluster = ifelse(cluster, "HIV+", "HIV-"))
+  }
+  
+  if (propInLegend) {
+    df <- df %>%
+      group_by(cluster) %>%
+      mutate(cluster = glue("{cluster} ({round(n() / nrow(.) * 100, digits = 1)}%)"))
   }
   
   p1 <- ggplot(df, aes(x = x, y = y))
@@ -835,4 +844,44 @@ plotUpsetCBC <- function(
   p <- barPlot / axisPlot + plot_layout(heights = c(5, 1)) & theme(axis.text = element_text(family = "Arial"))
   
   savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}
+
+cleanUpTrackAndSave <- function(
+  archrTrack,
+  fn,
+  gheight = 2.25,
+  gwidth = 4,
+  devices = c("png", "rds")
+) {
+  # plot the raw figure
+  p <- wrap_plots(archrTrack, ncol = 1, heights = c(3,2,1))
+  savePlot(p, fn = paste0(fn, "_orig"), devices = "png", gheight = gheight, gwidth = gwidth)
+  
+  # clean up theme
+  cleanUpTheme <- theme(
+    strip.background = element_blank(),
+    strip.text.y = element_blank(),
+    plot.title = element_blank(),
+    plot.subtitle = element_blank(),
+    text = element_text(family = "Arial", size = 6),
+    axis.text = element_text(family = "Arial", size = 6),
+    panel.border = element_blank())
+  
+  # clean up
+  archrTrack$bulktrack <- archrTrack$bulktrack +
+    labs(y = "Normalized signal") +
+    cleanUpTheme
+  
+  archrTrack$sctrack <- archrTrack$sctrack +
+    labs(y = "Binarized signal") +
+    cleanUpTheme +
+    scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR))
+  
+  archrTrack$genetrack <- archrTrack$genetrack +
+    cleanUpTheme +
+    labs(y = "Gene") +
+    scale_color_manual(values = c("blue", "orange"))
+  
+  savePlot(archrTrack, customSavePlot = wrap_plots(archrTrack, ncol = 1, heights = c(2,1.5,1.5)),
+    fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }

@@ -25,6 +25,14 @@ source("common_scripts/archrCleaning.R")
 source("common_scripts/clusterAnnotation.R")
 source("common_scripts/differentialExpression.R")
 source("common_scripts/ncbiSearcher.R")
+
+#https://stackoverflow.com/questions/23279904/modifying-an-r-package-function-for-current-r-session-assigninnamespace-not-beh
+source("common_scripts/plotBrowserTrackCustom.R")
+
+tmpFun <- get("plotBrowserTrack", envir = asNamespace("ArchR"))
+environment(plotBrowserTrack2) <- environment(tmpFun)
+attributes(plotBrowserTrack2) <- attributes(tmpFun)  # don't know if this is really needed
+# assignInNamespace("plotBrowserTrack", plotBrowserTrack2, ns="ArchR")
 ```
 
 ```{r}
@@ -145,6 +153,7 @@ plotUmap(projInvitro_matched,
   bringToTop = TRUE,
   embedding = "UMAP2",
   labelColors = FALSE,
+  propInLegend = TRUE,
   fn = "InVitro_umap_haystackOut")
 
 plotUmap(projChronic_matched, colorBy = "Clusters2", fn = "chronic_umap_unlabeledCluster", embedding = "UMAP2")
@@ -153,6 +162,7 @@ plotUmap(projChronic_matched,
   bringToTop = TRUE,
   labelColors = FALSE,
   embedding = "UMAP2",
+  propInLegend = TRUE,
   fn = "chronic_umap_haystackOut")
 plotUmap(projChronic_matched, colorBy = "individual", fn = "chronic_umap_indivdiual", embedding = "UMAP2", devices = "png")
 
@@ -210,7 +220,7 @@ adtInVitro_matched$manualClusterAnnot <- projInvitro_matched$manualClusterAnnot
 adtInVitro_matched$haystackOut <- projInvitro_matched$haystackOut
 
 plotUmap(projInvitro_matched, colorBy = "manualClusterAnnot", fn = "InVitro_umap_labeledCluster", embedding = "UMAP2")
-plotUmap(projInvitro_matched, colorBy = "manualClusterAnnot", fn = "InVitro_umap_labeledCluster_noPlotLabels", embedding = "UMAP2", labelColors = FALSE)
+plotUmap(projInvitro_matched, colorBy = "manualClusterAnnot", fn = "InVitro_umap_labeledCluster_noPlotLabels", embedding = "UMAP2", labelColors = FALSE, propInLegend = TRUE)
 
 plotDiscreteLollipop(projInvitro_matched, "inVitro_discreteAbsolute_matched",
   cluster = "manualClusterAnnot",
@@ -236,6 +246,7 @@ plotUmap(projChronic_matched, colorBy = "manualClusterAnnot",
 plotUmap(projChronic_matched, colorBy = "manualClusterAnnot",
   fn = "chronic_umap_labeledCluster_noPlotLabels",
   embedding = "UMAP2",
+  propInLegend = TRUE,
   labelColors = FALSE)
 
 plotDiscreteLollipop(projChronic_matched, "chronic_discreteAbsolute_matched",
@@ -294,13 +305,18 @@ invitro_activeLate_markers <- findHIVDifferentialMarkers(
 
 makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_activeLate")
 
+invitro_activeLate_markers_forVln <- invitro_activeLate_markers %>%
+  group_by(Status) %>%
+  arrange(desc(abs(piScore)), .by_group = TRUE) %>%
+  top_n(10, abs(piScore))
+
 plotVlnEnhanced(adtInVitro_matched, cells = names(invitro_activeLaterCells),
-  feats = invitro_activeLate_markers$gene,
+  feats = invitro_activeLate_markers_forVln$gene,
   xVar = "haystackOut",
   showAggregate = FALSE,
-  separator = invitro_activeLate_markers$Status,
-  titles = invitro_activeLate_markers$cleanName,
-  fn = "invitro_activated_vln")
+  separator = invitro_activeLate_markers_forVln$Status,
+  titles = invitro_activeLate_markers_forVln$cleanName,
+  fn = "invitro_activated_vln_top10")
 
 invitro_earlyCells <- adtInVitro_matched$haystackOut[grepl("(Tcm|early)", adtInVitro_matched$manualClusterAnnot) & invitro_tcells_check]
 invitro_early_markers <- findHIVDifferentialMarkers(
@@ -376,32 +392,55 @@ invitro_markerTest_Activated <- getMarkerFeatures(
 )
 
 invitro_markerTest_activatedPeaks <- getMarkers(invitro_markerTest_Activated, cutOff = "FDR < 0.05", returnGR = TRUE)
-invitro_markerTest_activatedPeaks <- hiAnnotator::getNearestFeature(invitro_markerTest_activatedPeaks$Activated_TRUE,
-  getGeneAnnotation(projInvitro_matched_gcPeak)[[1]], colnam = "symbol", feature.colnam = "symbol")
+invitro_markerTest_activatedPeaks <- invitro_markerTest_activatedPeaks$Activated_TRUE
+invitro_markerTest_activatedPeaks <- hiAnnotator::getNearestFeature(invitro_markerTest_activatedPeaks,
+  promoters(getGeneAnnotation(projInvitro_matched_gcPeak)[[1]], upstream = 0, downstream = 1), colnam = "nearestTSS",
+  feature.colnam = "symbol")
+
+invitro_markerTest_activatedPeaks <- hiAnnotator::getSitesInFeature(invitro_markerTest_activatedPeaks,
+  getGeneAnnotation(projInvitro_matched_gcPeak)[[1]], colnam = "inGene",
+  feature.colnam = "symbol")
+
 invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_activatedPeaks) %>%
   mutate(direction = ifelse(Log2FC > 0, "HIV+", "HIV-")) %>%
   mutate(piScore = Log2FC * -log10(FDR)) %>%
   group_by(direction) %>%
   slice_max(order_by = abs(piScore), n = 15) %>%
   arrange(abs(piScore), .by_group = TRUE) %>%
-  mutate(symbol2 = glue("{symbol} ({symbolDist})")) %>%
-  mutate(symbol2 = factor(symbol2, levels = symbol2)) %>%
-  ggplot(., aes(x = -log10(FDR), y = symbol2)) +
+  ungroup() %>%
+  mutate(symbol2 = case_when(
+    inGene != "FALSE" & str_detect(as.character(inGene), nearestTSS) ~ glue("{nearestTSS}* ({nearestTSSDist})"),
+    inGene != "FALSE" ~ glue("{inGene}*; {nearestTSS} ({nearestTSSDist})"),
+    TRUE ~ glue("{nearestTSS} ({nearestTSSDist})"))) %>%
+  mutate(symbol2 = str_wrap(symbol2, width = 35, exdent = 2)) %>%
+  mutate(symbol2 = factor(symbol2, levels = symbol2))
+
+iv_topPeaks_g <- ggplot(invitro_markerTest_activatedPeaks_topPeaks, aes(x = -log10(FDR), y = symbol2)) +
   geom_segment(aes(yend = symbol2, x = 0, xend = -log10(FDR)), linetype = "dashed", color = "#CCCCCC") +
-  geom_point(aes(size = abs(piScore), color = Log2FC)) +
+  geom_point(aes(color = Log2FC)) +
   scale_color_distiller(palette = "RdBu", direction = -1) +
   theme_classic() +
   theme(panel.background = element_rect(fill = NULL, colour = NULL),
+    plot.margin = margin(0,0,0,0),
     strip.background = element_blank(),
-    text = element_text(family = "Arial")) +
-  labs(color = "log2(fold change)",
-    size = "|π score|") +
+    strip.text = element_text(size = BASEPTFONTSIZE, margin = margin(0, 0, 0, 0)),
+    text = element_text(family = "Arial", size = BASEPTFONTSIZE),
+    axis.text = element_text(size = 6, color = "#000000"),
+    axis.title.y = element_blank(),
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = BASEPTFONTSIZE),
+    legend.box.margin = margin(0,0,0,-10),
+    legend.direction = "vertical",
+    legend.position = "right",
+    legend.key.height = unit(0.5, "line"),
+    legend.key.width = unit(0.5, "line")) +
+  labs(color = "log2(FC)") +
   scale_x_continuous(limits = c(0,NA)) +
   coord_cartesian(clip = "off") +
+  scale_size_area(max_size = 4) +
   facet_wrap(~ direction, scales = "free")
 
-savePlot(invitro_markerTest_activatedPeaks_topPeaks, fn = "invitro_markerTest_activated_topPeaks", devices = c("png", "rds"), gheight = 3.5, gwidth = 7)
-ggsave("outs/png/invitro_markerTest_activated_topPeaks.png", dpi = "retina", height = 3.5, width = 7)
+savePlot(iv_topPeaks_g, fn = "invitro_markerTest_activated_topPeaks", devices = c("png", "rds"), gheight = 3.5, gwidth = 5)
 
 plotVolcanoFromGetMarkerFeatures(invitro_markerTest_Activated,
   fn = "invitro_peaks_volcano_activatedHIV")
@@ -421,6 +460,17 @@ motifsDown <- peakAnnoEnrichment(
 plotMotifRank(motifsDown, "invitro_motifsUp_activatedHIVneg", color = HIVNEGCOLOR)
 plotMotifRank(motifsUp, "invitro_motifsUp_activatedHIVpos", color = HIVPOSCOLOR)
 
+
+iv_ccr5_track <- plotBrowserTrack2(projInvitro_matched_gcPeak,
+  geneSymbol = "CCR5",
+  useGroups = c("Activated_FALSE", "Activated_TRUE"),
+  groupBy = "condensedHivCluster",
+  upstream = 10000, downstream = 10000,
+  scCellsMax = 750,
+  plotSummary = c("bulkTrack", "scTracK", "geneTrack"),
+  pal = c(HIVNEGCOLOR, HIVPOSCOLOR), borderWidth = 0, sizes = c(3,2,1))$CCR5
+
+cleanUpTrackAndSave(iv_ccr5_track, fn = "invitro_activated_ccr5")
 
 plotVolcanoFromGetMarkerFeatures(invitro_markerTest_tcm_activated,
   fn = "invitro_peaks_volcano_tcmActivatedHIV")
@@ -795,6 +845,7 @@ sapply(seq_along(artFrags_matched$sample), function(i) {
 })
 # TODO need to add...LTR sequences for some sequences since they're not annotated.
 ```
+
 
 # get numbers for manuscript
 ```{r}

@@ -26,6 +26,25 @@ b_legend <- as_ggplot(get_legend(figB +
 figA <- figA + umapPlotThemeNoLeg
 figB <- figB + umapPlotThemeNoLeg
 
+figA <- figA + 
+    theme(axis.title = element_text(hjust = 0),
+      axis.line = element_line(color = "#FFFFFF00")) +
+    geom_segment(aes(x = -5, y = -10, xend = -5, yend = -7.5), arrow = arrow(length = unit(0.2, "cm"))) +
+    geom_segment(aes(x = -5, y = -10, xend = -2.5, yend = -10), arrow = arrow(length = unit(0.2, "cm"))) + 
+    scale_x_continuous(expand = c(0.02,0.02)) +
+    scale_y_continuous(expand = c(0.02,0.02)) +
+    coord_fixed()
+
+figB <- figB +
+  theme(axis.title = element_text(hjust = 0),
+    axis.line = element_line(color = "#FFFFFF00")) +
+  geom_segment(aes(x = -5, y = -10, xend = -5, yend = -7.5), arrow = arrow(length = unit(0.2, "cm")), color = "#FFFFFF") +
+  geom_segment(aes(x = -5, y = -10, xend = -2.5, yend = -10), arrow = arrow(length = unit(0.2, "cm")), color = "#FFFFFF") + 
+  scale_x_continuous(expand = c(0.02,0.02)) +
+  scale_y_continuous(expand = c(0.02,0.02)) +
+  coord_fixed() + 
+  labs(x = "", y = "")
+
 layout <- c(
   area(1, 1, 3, 3), #a
   area(1, 4, 3, 6), #b
