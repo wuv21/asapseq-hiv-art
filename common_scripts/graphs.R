@@ -744,6 +744,86 @@ plotFragMultiGraph <- function(
   savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }
 
+
+.spaceFacetRelative <- function(g, relHeights) {
+  tmpG <- ggplotGrob(g)
+  ind <- tmpG$layout$t[grepl("panel", tmpG$layout$name)]
+  tmpG$heights[ind] <- unit(relHeights, "null")
+  
+  return(tmpG)
+}
+
+plogFragMultiAnnotGraph <- function(
+  frags,
+  fragsAnnot,
+  allAnnotLevels,
+  fn,
+  devices = c("png", "rds"),
+  gwidth = 6,
+  gheight = 7.5) {
+  
+  df <- frags %>%
+    mutate(id = paste0(sample, cbc, seqname, startBp, endBp, readname, sep = "")) %>%
+    left_join(fragsAnnot, by = "id") %>%
+    mutate(annot = factor(annot, levels = allAnnotLevels)) %>%
+    separate(sample, sep = "_", into = c("individual", "well"), remove = FALSE) %>%
+    mutate(seqname = gsub("(chrA01|chrA08)", "", seqname)) %>%
+    group_by(readname) %>%
+    mutate(readNum = seq_along(sample)) %>%
+    mutate(readNumIndividual = paste0(individual, " Read #", readNum))
+  
+  gTheme <- theme(
+    axis.text.y = element_blank(),
+    strip.background = element_blank(),
+    axis.line.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.title = element_blank(),
+    legend.box.spacing = margin(0,0,0,0),
+    legend.margin = margin(0,0,0,0),
+    legend.position = "bottom",
+    text = element_text(family = "Arial", size = BASEPTFONTSIZE),
+    axis.text = element_text(size = 5),
+    axis.title = element_blank(),
+    panel.background = element_blank(),
+    panel.grid.major.y = element_line(color = "#EFEFEF"))
+  
+  annotG <- df %>%
+    ggplot(aes(y = cbc, x = annot, color = "green")) +
+    geom_point(size = 1) +
+    scale_x_discrete(drop = FALSE) +
+    scale_color_discrete(guide = guide_legend(override.aes = list(alpha = 0)))+
+    theme_classic() +
+    gTheme +
+    theme(legend.text = element_text(color = "transparent"),
+      axis.ticks.x = element_line(color = "#FFFFFF00"),
+      strip.text.y = element_blank()) +
+    lemon::facet_rep_wrap(seqname ~ ., scales = "free_y", ncol = 1, strip.position = "left")
+  
+  regionG <- df %>%
+    ggplot(aes(y = cbc, yend = cbc, x = startBp, xend = endBp, color = readNumIndividual)) +
+    geom_segment(alpha = 0.7) +
+    theme_classic() +
+    gTheme +
+    theme(
+      strip.background = element_rect(fill = "#EFEFEF", colour = "#EFEFEF"),
+      strip.text.y.left = element_text(angle = 0),
+      legend.position = "bottom",
+      legend.direction = "horizontal") +
+    lemon::facet_rep_wrap(~ seqname, scales = "free", ncol = 1, strip.position = "left")
+  
+  tmpN <- df %>%
+    ungroup() %>%
+    dplyr::group_by(seqname) %>%
+    summarise(count = length(unique(cbc)))
+    
+  regionG <- .spaceFacetRelative(regionG, tmpN$count)
+  annotG <- .spaceFacetRelative(annotG, tmpN$count)
+  
+  combG <- wrap_elements(regionG) + wrap_elements(annotG) + plot_layout(widths = c(3,1))
+  
+  savePlot(combG, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}
+
 plotArchRQCData <- function(
   proj,
   fn,
@@ -793,7 +873,8 @@ plotUpsetCBC <- function(
   fn,
   gheight = 2.5,
   gwidth = 2.5,
-  devices = c("png", "rds")
+  devices = c("png", "rds"),
+  separateByIndividual = FALSE
 ) {
   df <- data.frame(
     cbc = c(atacCBC, hivCBC, adtCBC),
@@ -801,18 +882,46 @@ plotUpsetCBC <- function(
     value = TRUE
   )
   
+  if (separateByIndividual) {
+    df <- df %>%
+      separate(cbc, sep = "#", remove = FALSE, into = c("sample", "oligoBC")) %>%
+      separate(sample, sep = "_", into = c("individual", "well"))
+    
+    df <- df %>%
+      pivot_wider(id_cols = all_of(c("individual", "cbc")), names_from = modal, values_from = value) %>%
+      group_by(individual, ATAC, HIV, ADT)
+
+  } else {
+    df <- df %>%
+      pivot_wider(id_cols = cbc, names_from = modal, values_from = value) %>%
+      group_by(ATAC, HIV, ADT)
+  }
+  
   df <- df %>%
-    pivot_wider(id_cols = cbc, names_from = modal, values_from = value) %>%
-    group_by(ATAC, HIV, ADT) %>%
     summarize(n = n()) %>%
-    ungroup() %>%
-    mutate(rowID = factor(row_number()))
+    ungroup()
+    
+  if (separateByIndividual) {
+    df <- df %>%
+      group_by(individual) %>%
+      mutate(rowID = paste0(ATAC, HIV, ADT)) %>%
+      mutate(rowID = factor(rowID, levels = unique(rowID))) %>%
+      mutate(nudge = n + max(n) * 0.1)
+    
+  } else {
+    df <- df %>%
+      mutate(rowID = factor(row_number())) %>%
+      mutate(nudge = n + max(n) * 0.1)
+  }
+  
+
   
   barPlot <- df %>%
     ggplot(aes(x = rowID, y = n)) +
     geom_bar(stat = "identity", width = 0.5, fill = "#000000") +
-    geom_text(aes(label = n), nudge_y = 250, size = BASEFONTSIZE) +
+    geom_text(aes(label = n, y = nudge), size = BASEFONTSIZE) +
     scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+    scale_x_discrete(drop = FALSE) +
     coord_cartesian(clip = "off") +
     labs(y = "Count") +
     theme_classic() +
@@ -821,7 +930,13 @@ plotUpsetCBC <- function(
       axis.title.y = element_text(size = BASEPTFONTSIZE),
       axis.text.x = element_blank(),
       axis.ticks.x = element_blank(),
-      axis.title.x = element_blank())
+      axis.title.x = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_text(size = BASEPTFONTSIZE))
+  
+  if (separateByIndividual) {
+    barPlot <- barPlot + facet_wrap(~ individual, scales = "free", strip.position = "right", ncol = 1)
+  }
   
   axisPlot <- df %>%
     dplyr::select(-n) %>%

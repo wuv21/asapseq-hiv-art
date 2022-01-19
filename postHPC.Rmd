@@ -407,7 +407,7 @@ invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_acti
   mutate(direction = ifelse(Log2FC > 0, "HIV+", "HIV-")) %>%
   mutate(piScore = Log2FC * -log10(FDR)) %>%
   group_by(direction) %>%
-  slice_max(order_by = abs(piScore), n = 15) %>%
+  # slice_max(order_by = abs(piScore), n = 15) %>%
   arrange(abs(piScore), .by_group = TRUE) %>%
   ungroup() %>%
   mutate(symbol2 = case_when(
@@ -667,6 +667,30 @@ art_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
 
 makeDifferentialLollipop(art_markers, "art_lollipop")
 
+art_apc_check <- (grepl("APC", adtART_matched$manualClusterAnnot))
+art_apc <- adtART_matched$haystackOut[art_apc_check]
+
+VlnPlot(subset(adtART_matched, cells = names(art_apc)), features = c("A0072", "A0081", "A0034"), group.by = "haystackOut")
+
+
+art_ccr5_track <- plotBrowserTrack2(projART_matched,
+  geneSymbol = "CD5",
+  useGroups = c("T cell_FALSE", "T cell_TRUE"),
+  groupBy = "condensedHivCluster",
+  upstream = 10000, downstream = 10000,
+  scCellsMax = 750,
+  plotSummary = c("bulkTrack", "scTracK", "geneTrack"),
+  pal = c(HIVNEGCOLOR, HIVPOSCOLOR), borderWidth = 0, sizes = c(2,2,1))$CD5
+
+cleanUpTrackAndSave(art_ccr5_track, fn = "art_ccr5")
+grid::grid.draw(plotBrowserTrack(projART_matched, plotSummary = c("bulkTrack", "scTrack", "geneTrack"), groupBy = "condensedHivCluster", geneSymbol = "SELPLG", scCellsMax = 300, sizes = c(2, 4, 2))$`SELPLG`)
+
+plotVlnEnhanced(adtART_matched, cells = names(art_tcells),
+  feats = art_markers$gene,
+  separator = art_markers$Status,
+  titles = art_markers$cleanName,
+  fn = "art_tcells_vln")
+
 art_renamingDF <- getCellColData(projART_matched, select = c("haystackOut", "manualClusterAnnot")) %>%
   as.data.frame(.) %>%
   mutate(cellNames = projART_matched$cellNames) %>%
@@ -752,7 +776,6 @@ chronic_qc_nfrags %>%
   summarize(avg = mean(yaxis), 
     sd = stats::sd(yaxis))
   
-
 chronic_qc_tss <- plotArchRQCData(projChronic_matched, fn = "chronic_qc_haystack_TSS", ycol = "TSSEnrichment")
 chronic_qc_tss %>%
   group_by(xaxis) %>%
@@ -762,7 +785,28 @@ chronic_qc_tss %>%
 plotUpsetCBC(atacCBC = projChronic$cellNames,
   hivCBC = unique(haystackChronic$allViralFrags$newCbc),
   adtCBC = Cells(adtChronic),
+  separateByIndividual = TRUE,
   fn = "chronic_upset_cbc")
+
+art_qc_nfrags <- plotArchRQCData(projART_matched, fn = "art_qc_haystack_frags",
+  ycol = "log10(nFrags)", ylbl = "log10(unique fragments)")
+art_qc_nfrags %>%
+  group_by(xaxis) %>%
+  summarize(avg = mean(yaxis), 
+    sd = stats::sd(yaxis))
+
+art_qc_tss <- plotArchRQCData(projART_matched, fn = "art_qc_haystack_tss",
+  ycol = "TSSEnrichment")
+art_qc_tss %>%
+  group_by(xaxis) %>%
+  summarize(avg = mean(yaxis), 
+    sd = stats::sd(yaxis))
+
+plotUpsetCBC(atacCBC = projART$cellNames,
+  hivCBC = unique(haystackART$allViralFrags$newCbc),
+  adtCBC = Cells(adtART),
+  separateByIndividual = TRUE,
+  fn = "art_upset_cbc")
 ```
 
 # LTR vs internal coverage
@@ -825,7 +869,7 @@ checkFragmentOverlap <- function(q1, q2, s1, s2) {
   return(FALSE)
 }
 
-sapply(seq_along(artFrags_matched$sample), function(i) {
+artFrags_matchedWithAnnot <- lapply(seq_along(artFrags_matched$sample), function(i) {
   seqname <- artFrags_matched[i, "seqname"]
   seqnameAnnots <- artVirusGeneAnnots[[seqname]]
   
@@ -835,17 +879,32 @@ sapply(seq_along(artFrags_matched$sample), function(i) {
   
   q1 <- artFrags_matched[i, "startBp"]
   q2 <- artFrags_matched[i, "endBp"]
+
+  id <- paste(artFrags_matched[i, "sample"],
+    artFrags_matched[i, "cbc"],
+    artFrags_matched[i, "seqname"],
+    artFrags_matched[i, "startBp"],
+    artFrags_matched[i, "endBp"],
+    artFrags_matched[i, "readname"], sep = "")
   
-  matches <- sapply(seq_along(seqnameAnnots$annotation), function(i) {
+  matches <- lapply(seq_along(seqnameAnnots$annotation), function(i) {
     s1 <- seqnameAnnots$startPos[i]
     s2 <- seqnameAnnots$endPos[i]
     
-    return(checkFragmentOverlap(q1, q2, s1, s2))
+    check <- checkFragmentOverlap(q1, q2, s1, s2)
+    
+    if (check) {
+      return(data.frame(id = id, annot = seqnameAnnots$annotation[i]))
+    } else {
+      return(NULL)
+    }
   })
-  
-  return(seqnameAnnots$annotation[matches])
+
+  return(bind_rows(matches))
 })
-# TODO need to add...LTR sequences for some sequences since they're not annotated.
+
+artFrags_matchedWithAnnot <- bind_rows(artFrags_matchedWithAnnot)
+plogFragMultiAnnotGraph(artFrags_matched, artFrags_matchedWithAnnot, unique(hxb2GeneAnnots$annotation), fn = "art_frags")
 ```
 
 
