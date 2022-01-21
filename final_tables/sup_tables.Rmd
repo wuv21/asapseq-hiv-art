@@ -1,0 +1,192 @@
+---
+header-includes:
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+- \pagenumbering{gobble}
+output:
+  pdf_document:
+    latex_engine: xelatex
+geometry: margin=1.5cm
+mainfont: Arial
+fontsize: 10pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE}
+library(dplyr)
+library(xtable)
+library(kableExtra)
+```
+
+\def\fillandplacepagenumber{%
+ \par\pagestyle{empty}%
+ \vbox to 0pt{\vss}\vfill
+ \vbox to 0pt{\baselineskip0pt
+   \hbox to\linewidth{\hss}%
+   \baselineskip\footskip
+   \hbox to\linewidth{%
+     \hfil\thepage\hfil}\vss}}
+
+**Supplemental Table 1:** Catalog of TotalSeqA antibodies used for study.
+```{r, echo=FALSE, message=FALSE}
+supTsaCatalog <- readRDS("../rds/tsa_catalog.rds")
+supTsaCatalog <- supTsaCatalog %>%
+  select(DNA_ID, cleanName, Clone, Barcode, isCtrl) %>%
+  rename(isControl = isCtrl,
+    Description = cleanName)
+
+kbl(supTsaCatalog, booktabs = T, align = "c", longtable = TRUE)
+```
+
+\pagebreak
+
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTable <- function(fn, as_kbl = TRUE, renameClusterCol = FALSE) {
+  df <- read.csv(fn, sep = "\t")
+  
+  if (renameClusterCol) {
+    df <- df %>%
+      rename(cluster = Status)
+  }
+  
+  df <- df %>%
+    select(cluster, cleanName, avg_log2FC, p_val_adj, piScore) %>%
+    mutate(p_val_adj = format(p_val_adj, scientific = TRUE, digits = 2)) %>%
+    mutate(across(where(is.numeric), round, 2)) %>%
+    group_by(cluster) %>%
+    arrange(cluster, desc(abs(piScore))) %>%
+    rename(
+      Cluster = cluster,
+      Marker = cleanName,
+      `log2(fold change)` = avg_log2FC,
+      `Adjusted p value` = p_val_adj,
+      `π-score` = piScore)
+  
+  if (as_kbl) {
+    return(kbl(df, booktabs = T, align = "c", longtable = TRUE, linesep = "") %>%
+    kable_styling(latex_options = c("repeat_header")))
+  } else {
+    return(df)
+  }
+}
+
+prepareDEMarkerTableCompiled <- function(fns, descriptors, idCol = "Subset") {
+  dfs <- lapply(fns, function(f) {
+    df <- prepareDEMarkerTable(f, as_kbl = FALSE, renameClusterCol = TRUE)
+    return(df)
+  })
+  
+  names(dfs) <- descriptors
+  final_df <- bind_rows(dfs, .id = idCol)
+  
+  return(kbl(final_df, booktabs = T, align = "c", longtable = TRUE, linesep = "") %>%
+    kable_styling(latex_options = c("repeat_header")))
+}
+```
+
+\pagebreak
+
+**Supplemental Table 2:** Significant surface markers enriched in each cluster (over all other cells) for *in vitro* model (Level 1).
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTable("../outs/tsv/inVitro_initClusterMarkers.tsv")
+```
+
+\pagebreak
+
+**Supplemental Table 3:** Significant surface markers enriched in HIV+ versus HIV- cells for *in vitro* model (Level 1).
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTableCompiled(
+  fns = c(
+    "../outs/tsv/invitro_markers.tsv",
+    "../outs/tsv/invitro_activeLate_markers.tsv",
+    "../outs/tsv/invitro_early_markers.tsv"),
+  descriptors = c(
+    "CD4+",
+    "activated/late diff CD4+",
+    "early diff CD4+"
+  )
+)
+```
+
+\pagebreak
+\blandscape
+**Supplemental Table 4:** Differential peak list for activated CD4+ cells between HIV+ and HIV- for *in vitro* model (Level 1).
+```{r, echo=FALSE, message=FALSE}
+ivPeakListActivated <- read.csv("../outs/tsv/invitro_markerTest_activatedPeaks_topPeaks.tsv", sep = "\t")
+
+ivPeakListActivated <- ivPeakListActivated %>%
+  mutate(Subset = ifelse(Log2FC > 0, "HIV+", "HIV-")) %>%
+  select(Subset, seqnames, start, end, Log2FC, FDR, piScore, inGene, nearestTSS, nearestTSSDist) %>%
+  mutate(FDR = format(FDR, scientific = TRUE, digits = 2)) %>%
+  mutate(across(where(is.numeric), round, 2)) %>%
+  mutate(inGene = gsub(",", ", ", inGene)) %>%
+  mutate(inGene = linebreak(stringr::str_wrap(inGene, width = 15))) %>%
+  rename(
+    `Chr` = seqnames,
+    `Start` = start,
+    `End` = end,
+    `π-score` = piScore,
+    `In Gene` = inGene,
+    `Nearest TSS Dist` = nearestTSSDist,
+    `Nearest TSS` = nearestTSS
+  ) %>%
+  group_by(Subset) %>%
+  arrange(desc(abs(`π-score`)), .by_group = TRUE)
+
+return(kbl(ivPeakListActivated, booktabs = T, align = "c", longtable = TRUE, linesep = "", escape = F) %>%
+    kable_styling(latex_options = c("repeat_header")))
+```
+\elandscape
+
+\pagebreak
+
+**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during chronic infection (Level 2).
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTable("../outs/tsv/chronic_initClusterMarkers.tsv")
+```
+
+\pagebreak
+
+**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during chronic infection (Level 2).
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTableCompiled(
+  fns = c(
+    "../outs/tsv/chronic_markers.tsv",
+    "../outs/tsv/chronic_tfh_markers.tsv"),
+  descriptors = c(
+    "CD4+",
+    "Tfh CD4+"
+  )
+)
+```
+
+\pagebreak
+
+**Supplemental Table 7:** Significant surface markers enriched in each cluster (over all other cells) during treated infection (Level 3).
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTable("../outs/tsv/art_initClusterMarkers.tsv")
+```
+\pagebreak
+
+**Supplemental Table 8:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection (Level 3).
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTableCompiled(
+  fns = c(
+    "../outs/tsv/art_markers.tsv"),
+  descriptors = c(
+    "CD4+"
+  )
+)
+```
+
+
+
+
+
+
+
+

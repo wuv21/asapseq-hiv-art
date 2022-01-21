@@ -25,6 +25,7 @@ source("common_scripts/archrCleaning.R")
 source("common_scripts/clusterAnnotation.R")
 source("common_scripts/differentialExpression.R")
 source("common_scripts/ncbiSearcher.R")
+source("common_scripts/exportTsv.R")
 
 #https://stackoverflow.com/questions/23279904/modifying-an-r-package-function-for-current-r-session-assigninnamespace-not-beh
 source("common_scripts/plotBrowserTrackCustom.R")
@@ -296,6 +297,7 @@ invitro_markers <- findHIVDifferentialMarkers(seu = adtInVitro_matched,
   tsa_catalog = tsa_catalog)
 
 makeDifferentialLollipop(invitro_markers, "invitro_lollipop")
+exportTsv(invitro_markers)
 
 invitro_activeLaterCells <- adtInVitro_matched$haystackOut[grepl("CD4 Activated", adtInVitro_matched$manualClusterAnnot) & invitro_tcells_check]
 invitro_activeLate_markers <- findHIVDifferentialMarkers(
@@ -306,6 +308,7 @@ invitro_activeLate_markers <- findHIVDifferentialMarkers(
   featuresToUse = inVitroAdtToUse)
 
 makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_activeLate")
+exportTsv(invitro_activeLate_markers)
 
 invitro_activeLate_markers_forVln <- invitro_activeLate_markers %>%
   group_by(Status) %>%
@@ -329,7 +332,7 @@ invitro_early_markers <- findHIVDifferentialMarkers(
   featuresToUse = inVitroAdtToUse)
 
 makeDifferentialLollipop(invitro_early_markers, "invitro_lollipop_early")
-
+exportTsv(invitro_early_markers)
 
 invitroGcPeakFn <- paste0(getOutputDirectory(projInvitro_matched), "_gcPeakCalled")
 if (!dir.exists(invitroGcPeakFn)) {
@@ -407,7 +410,6 @@ invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_acti
   mutate(direction = ifelse(Log2FC > 0, "HIV+", "HIV-")) %>%
   mutate(piScore = Log2FC * -log10(FDR)) %>%
   group_by(direction) %>%
-  # slice_max(order_by = abs(piScore), n = 15) %>%
   arrange(abs(piScore), .by_group = TRUE) %>%
   ungroup() %>%
   mutate(symbol2 = case_when(
@@ -417,7 +419,10 @@ invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_acti
   mutate(symbol2 = str_wrap(symbol2, width = 35, exdent = 2)) %>%
   mutate(symbol2 = factor(symbol2, levels = symbol2))
 
-iv_topPeaks_g <- ggplot(invitro_markerTest_activatedPeaks_topPeaks, aes(x = -log10(FDR), y = symbol2)) +
+exportTsv(invitro_markerTest_activatedPeaks_topPeaks)
+
+iv_topPeaks_g <- ggplot(invitro_markerTest_activatedPeaks_topPeaks %>% slice_max(order_by = abs(piScore), n = 15),
+    aes(x = -log10(FDR), y = symbol2)) +
   geom_segment(aes(yend = symbol2, x = 0, xend = -log10(FDR)), linetype = "dashed", color = "#CCCCCC") +
   geom_point(aes(color = Log2FC)) +
   scale_color_distiller(palette = "RdBu", direction = -1) +
@@ -459,9 +464,16 @@ motifsDown <- peakAnnoEnrichment(
   peakAnnotation = "Motif",
   cutOff = "FDR < 0.05 & Log2FC < 0")
 
+motifsAll <- peakAnnoEnrichment(
+  seMarker = invitro_markerTest_Activated,
+  ArchRProj = projInvitro_matched_gcPeak,
+  peakAnnotation = "Motif",
+  cutOff = "FDR < 0.05")
+
 plotMotifRank(motifsDown, "invitro_motifsUp_activatedHIVneg", color = HIVNEGCOLOR)
 plotMotifRank(motifsUp, "invitro_motifsUp_activatedHIVpos", color = HIVPOSCOLOR)
 
+exportTsv(motifsAll, fn = "iv_activated_motifsAll", motifMode = TRUE)
 
 iv_ccr5_track <- plotBrowserTrack2(projInvitro_matched_gcPeak,
   geneSymbol = "CCR5",
@@ -548,6 +560,7 @@ plotVlnEnhanced(adtChronic_matched, cells = names(chronic_tcells),
   fn = "chronic_tcells_vln")
 
 makeDifferentialLollipop(chronic_markers, "chronic_lollipop")
+exportTsv(chronic_markers)
  
 chronic_tfh_cells <- adtChronic_matched$haystackOut[grepl("(CD4 Tfh)", adtChronic_matched$manualClusterAnnot)]
 chronic_tfh_markers <- findHIVDifferentialMarkers(
@@ -559,6 +572,7 @@ chronic_tfh_markers <- findHIVDifferentialMarkers(
   featuresToUse = chronicAdtToUse)
 
 makeDifferentialLollipop(chronic_tfh_markers, "chronic_lollipop_tfh")
+exportTsv(chronic_tfh_markers)
 
 plotVlnEnhanced(adtChronic_matched, cells = names(chronic_tfh_cells),
   feats = chronic_tfh_markers$gene,
@@ -666,6 +680,7 @@ art_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
   tsa_catalog = tsa_catalog)
 
 makeDifferentialLollipop(art_markers, "art_lollipop")
+exportTsv(art_markers)
 
 art_apc_check <- (grepl("APC", adtART_matched$manualClusterAnnot))
 art_apc <- adtART_matched$haystackOut[art_apc_check]
