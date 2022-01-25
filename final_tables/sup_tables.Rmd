@@ -35,11 +35,11 @@ library(kableExtra)
 ```{r, echo=FALSE, message=FALSE}
 supTsaCatalog <- readRDS("../rds/tsa_catalog.rds")
 supTsaCatalog <- supTsaCatalog %>%
-  select(DNA_ID, cleanName, Clone, Barcode, isCtrl) %>%
-  rename(isControl = isCtrl,
-    Description = cleanName)
+  select(DNA_ID, cleanName, Clone, Barcode) %>%
+  rename(Description = cleanName)
 
-kbl(supTsaCatalog, booktabs = T, align = "c", longtable = TRUE)
+kbl(supTsaCatalog, booktabs = T, align = "c", longtable = TRUE) %>%
+  kable_styling(latex_options = c("repeat_header"))
 ```
 
 \pagebreak
@@ -124,6 +124,7 @@ ivPeakListActivated <- ivPeakListActivated %>%
   mutate(FDR = format(FDR, scientific = TRUE, digits = 2)) %>%
   mutate(across(where(is.numeric), round, 2)) %>%
   mutate(inGene = gsub(",", ", ", inGene)) %>%
+  mutate(inGene = ifelse(inGene == "FALSE", "-", inGene)) %>%
   mutate(inGene = linebreak(stringr::str_wrap(inGene, width = 15))) %>%
   rename(
     `Chr` = seqnames,
@@ -137,8 +138,8 @@ ivPeakListActivated <- ivPeakListActivated %>%
   group_by(Subset) %>%
   arrange(desc(abs(`π-score`)), .by_group = TRUE)
 
-return(kbl(ivPeakListActivated, booktabs = T, align = "c", longtable = TRUE, linesep = "", escape = F) %>%
-    kable_styling(latex_options = c("repeat_header")))
+kbl(ivPeakListActivated, booktabs = T, align = "c", longtable = TRUE, linesep = "", escape = F) %>%
+    kable_styling(latex_options = c("repeat_header"))
 ```
 \elandscape
 

@@ -747,6 +747,8 @@ projART_matched <- addDeviationsMatrix(
   force = TRUE
 )
 
+saveArchRProject(projART_matched)
+
 art_markerTest <- getMarkerFeatures(
   ArchRProj = projART_matched, 
   useMatrix = "MotifMatrix",
