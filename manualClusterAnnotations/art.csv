@@ -1,22 +1,19 @@
 ﻿cluster,annotation
-C9,CD4 Tem/effector #1
-C7,CD4 Tem/effector #2
-C6,NK/NKT
-C5,pDC
-C4,APC #1
-C3,APC #2
-C23,APC #3
-C22,CD4 Tcm #3
-C21,CD4 Tcm #2
-C20,CD4 Tcm #1
-C2,B
-C19,CD4 MAIT
-C18,CD4 cTfh
-C17,CD4 Tcm #4
-C16,CD4 Tcm/MAIT
-C15,CD4 Ttm #1
-C14,CD4 Ttm #2
-C13,CD4 Treg
-C12,CD4 Tem CD127high #1
-C11,CD4 Tem
-C10,CD4 Tem CD127high #2
+C9,CD4 Tcm #2
+C8,CD4 Th2
+C7,Mix/other
+C6,CD4 Treg
+C4,APC/Other
+C3,pDC/B
+C2,Monocyte/APC
+C19,CD4 Tem CD127+
+C18,CD4 Tem/effector #1
+C17,NK/NKT/CD8
+C16,CD4 Tem/effector #2
+C15,B/Mix
+C14,CD4 Tcm #4
+C13,CD4 Tcm #1
+C12,CD4 cTfh
+C11,CD4 Tcm #3
+C10,CD4 Tcm/Ttm
+C1,APC

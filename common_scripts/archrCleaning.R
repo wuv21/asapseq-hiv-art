@@ -21,6 +21,10 @@ addHaystackData <- function(proj, haystackParentDir, haystackSamples) {
     df <- df %>%
       filter(alreadyRecordedInIntegration != "True")
     
+    if (nrow(df) == 0) {
+      return(NULL)
+    }
+    
     intSiteFragsFn <- glue("{haystackParentDir}/{i}/integrationSites_viralFrags.tsv")
     if (file.exists(intSiteFragsFn)) {
       df2 <- read.csv(intSiteFragsFn, header = TRUE, sep = "\t")

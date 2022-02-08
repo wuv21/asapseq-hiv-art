@@ -5,7 +5,7 @@ figA <- readRDS("../outs/rds/art_tcells_vln.rds")
 ncols <- 5
 
 figAB <- figA
-figALen <- 4
+figALen <- 3
 figAB <- lapply(seq_along(figAB), function(i) {
   if (i == 1 | i == figALen + 1) {
     figAB[[i]] <- figAB[[i]] + plot_layout(tag_level = "keep")
@@ -40,5 +40,5 @@ p <- wrap_plots(figAB) +
     plot.tag.position = c(0, 1))
 
 
-saveFinalFigure(fn = "supfig_art_adt", devices = c("pdf", "png"), plot = p, gwidth = 8, gheight = 6)
+saveFinalFigure(fn = "supfig_art_adt", devices = c("pdf", "png"), plot = p, gwidth = 8, gheight = 5)
 

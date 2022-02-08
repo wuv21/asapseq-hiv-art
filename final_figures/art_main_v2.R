@@ -25,8 +25,8 @@ b_legend <- as_ggplot(get_legend(figB +
 figA <- figA + umapPlotThemeNoLeg
 figB <- figB + umapPlotThemeNoLeg
 
-xInit <- -7.5
-yInit <- -9
+xInit <- -15
+yInit <- -7.5
 adj <- 2.5
 arrow_1 <- aes(x = xInit, y = yInit, xend = xInit, yend = yInit + adj)
 arrow_2 <- aes(x = xInit, y = yInit, xend = xInit + adj, yend = yInit)

@@ -242,8 +242,9 @@ plotVlnEnhanced <- function(
   names(titleDict) <- feats
   
   df[, feats] <- t(seu@assays$tsa@data[feats, cells])
+  
   df <- df %>%
-    pivot_longer(cols = all_of(feats), names_to = "DNA_ID", values_to = "y") %>%
+    tidyr::pivot_longer(cols = all_of(feats), names_to = "DNA_ID", values_to = "y") %>%
     mutate(cleanName = titleDict[DNA_ID]) %>%
     mutate(cleanName = factor(cleanName, levels = titles))
   
@@ -411,7 +412,7 @@ makeDifferentialLollipop <- function(
           x = "π score") +
         scale_x_continuous(expand = c(0, 0), limits = c(0, max(abs(.$piScore) + 0.3))) +
         theme_classic() +
-        theme(axis.text = element_text(size = BASEPTFONTSIZE),
+        theme(axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
           axis.title = element_text(size = BASEPTFONTSIZE),
           legend.position = "none",
           panel.background = element_rect(fill = NULL, colour = NULL),
@@ -432,7 +433,6 @@ plotMotifRank <- function(
   devices = c("png", "rds"),
   direction = NULL,
   chromVARmode = FALSE) {
-  
   
   if (chromVARmode) {
     df <- data.frame(
@@ -482,7 +482,7 @@ plotMotifRank <- function(
     theme_classic() +
     theme(
       axis.title = element_text(size = BASEPTFONTSIZE),
-      axis.text = element_text(size = BASEPTFONTSIZE)) +
+      axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000")) +
     labs(x = "Rank Sorted Motifs Enriched",
       y = yLbl)
   
@@ -493,7 +493,8 @@ plotMotifDot <- function(
   markerFeatures,
   fn,
   direction = "positive",
-  devices = c("png", "rds")
+  devices = c("png", "rds"),
+  pValMax = 0.05
 ) {
   df <- data.frame(
     y = log10(assays(markerFeatures)$FDR[, 1]) * -1,
@@ -509,7 +510,7 @@ plotMotifDot <- function(
     pointColor <- HIVPOSCOLOR
   }
   
-  df <- filter(df, y > -log10(0.05))
+  df <- filter(df, y > -log10(pValMax))
   df <- df[order(df$y, decreasing = TRUE), ]
   df$motif <- factor(df$motif, levels = df$motif)
   
@@ -519,7 +520,7 @@ plotMotifDot <- function(
     coord_cartesian(clip = "off") +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
-      axis.text = element_text(size = BASEPTFONTSIZE),
+      axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
       axis.title = element_text(size = BASEPTFONTSIZE)
     ) +
     labs(x = "Motif",
@@ -572,7 +573,7 @@ plotVolcanoFromGetMarkerFeatures <- function(
         scale_color_manual(values = c(HIVNEGCOLOR, "#dddddd", HIVPOSCOLOR))
     } +
     theme(legend.position = "bottom",
-      axis.text = element_text(size = BASEPTFONTSIZE),
+      axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
       axis.title = element_text(size = BASEPTFONTSIZE),
       legend.key.size = unit(BASEPTFONTSIZE, 'points'),
       legend.text = element_text(size = BASEPTFONTSIZE)) +
@@ -767,10 +768,10 @@ plogFragMultiAnnotGraph <- function(
     left_join(fragsAnnot, by = "id") %>%
     mutate(annot = factor(annot, levels = allAnnotLevels)) %>%
     separate(sample, sep = "_", into = c("individual", "well"), remove = FALSE) %>%
-    mutate(seqname = gsub("(chrA01|chrA08)", "", seqname)) %>%
+    mutate(seqname = gsub("(chrA01|chrA08|chr|chrA01\\.)", "", seqname)) %>%
     group_by(readname) %>%
     mutate(readNum = seq_along(sample)) %>%
-    mutate(readNumIndividual = paste0(individual, " Read #", readNum))
+    mutate(readNumIndividual = paste0(individual, " R#", readNum))
   
   gTheme <- theme(
     axis.text.y = element_blank(),
@@ -789,9 +790,9 @@ plogFragMultiAnnotGraph <- function(
   
   annotG <- df %>%
     ggplot(aes(y = cbc, x = annot, color = "green")) +
-    geom_point(size = 1) +
+    geom_point(size = 0.6) +
     scale_x_discrete(drop = FALSE) +
-    scale_color_discrete(guide = guide_legend(override.aes = list(alpha = 0)))+
+    scale_color_discrete(guide = guide_legend(override.aes = list(alpha = 0), nrow = 2))+
     theme_classic() +
     gTheme +
     theme(legend.text = element_text(color = "transparent"),
@@ -819,7 +820,7 @@ plogFragMultiAnnotGraph <- function(
   regionG <- .spaceFacetRelative(regionG, tmpN$count)
   annotG <- .spaceFacetRelative(annotG, tmpN$count)
   
-  combG <- wrap_elements(regionG) + wrap_elements(annotG) + plot_layout(widths = c(3,1))
+  combG <- wrap_elements(regionG) + wrap_elements(annotG) + plot_layout(widths = c(3.5,1.5))
   
   savePlot(combG, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }
@@ -900,21 +901,20 @@ plotUpsetCBC <- function(
   df <- df %>%
     summarize(n = n()) %>%
     ungroup()
-    
+  
+  nudgeBuffer <- 0.05
   if (separateByIndividual) {
     df <- df %>%
       group_by(individual) %>%
       mutate(rowID = paste0(ATAC, HIV, ADT)) %>%
       mutate(rowID = factor(rowID, levels = unique(rowID))) %>%
-      mutate(nudge = n + max(n) * 0.1)
+      mutate(nudge = n + max(n) * (n_groups(.) * nudgeBuffer))
     
   } else {
     df <- df %>%
       mutate(rowID = factor(row_number())) %>%
-      mutate(nudge = n + max(n) * 0.1)
+      mutate(nudge = n + max(n) * nudgeBuffer)
   }
-  
-
   
   barPlot <- df %>%
     ggplot(aes(x = rowID, y = n)) +
@@ -1000,4 +1000,51 @@ cleanUpTrackAndSave <- function(
   
   savePlot(archrTrack, customSavePlot = wrap_plots(archrTrack, ncol = 1, heights = c(2,1.5,1.5)),
     fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}
+
+plotGgRoc <- function(
+  perf,
+  fn,
+  devices = c("rds", "png"),
+  gheight = 3,
+  gwidth = 3
+) {
+  if (typeof(perf) == "list") {
+    dfs <- lapply(perf, function(pe) {
+      return(data.frame(
+        x = pe@x.values[[1]],
+        y = pe@y.values[[1]],
+        alpha = pe@alpha.values[[1]]
+      ))
+    })
+    
+    names(dfs) <- names(perf)
+    df <- bind_rows(dfs, .id = "colorVar")
+  } else {
+    df <- data.frame(
+      x = perf@x.values[[1]],
+      y = perf@y.values[[1]],
+      alpha = perf@alpha.values[[1]],
+      colorVar = ""
+    )
+  }
+  
+  g <- ggplot(df, aes(x = x, y = y, color = colorVar)) +
+    geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), linetype = "dashed", color = "#cccccc") +
+    geom_path() +
+    labs(x = "False positive rate", y = "True positive rate") +
+    theme_classic() +
+    scale_x_continuous(limits = c(0,1), expand = c(0, 0.01)) +
+    scale_y_continuous(limits = c(0,1), expand = c(0, 0.01)) +
+    coord_fixed() +
+    theme(
+      text = element_text(family = "Arial", size = BASEPTFONTSIZE, color = "#000000"),
+      axis.text = element_text(family = "Arial", size = BASEPTFONTSIZE, color = "#000000"),
+      legend.title = element_blank(),
+      legend.key.size = unit(0.5, "lines"),
+      legend.margin = margin(-5,0,0,0),
+      legend.position = "bottom"
+    )
+  
+  savePlot(g, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }

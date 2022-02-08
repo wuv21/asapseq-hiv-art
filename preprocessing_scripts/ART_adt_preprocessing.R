@@ -4,7 +4,7 @@ suppressMessages(library(tidyverse))
 suppressMessages(library(glue))
 source("adt_preprocessing_general.R")
 
-samples <- c("A01_1", "A01_2", "A01_3", "A01_4", "A08_1", "A08_2", "A08_4")
+samples <- c("A01_1", "A01_2", "A01_3", "A01_4", "A08_1", "A08_2", "A08_4", "BEAT045_A2", "BEAT045_A3", "BEAT045_B1", "BEAT045_B2")
 
 tsa_catalog <- readRDS("../rds/tsa_catalog.rds")
 
@@ -20,11 +20,15 @@ adtART <- merge(x = seuList[[1]],
   add.cell.ids = paste0(samples, "#"),
   merge.data = TRUE)
 
+
+adtART <- RenameCells(adtART, new.names = gsub("BEAT045", "B45", Cells(adtART)))
+adtART$orig.ident <- gsub("BEAT045", "B45", adtART$orig.ident)
+
 adtART <- NormalizeData(adtART, normalization.method = "CLR", scale.factor = 10000, margin = 2)
 adtART <- ScaleData(adtART) %>%
   RunPCA(features = rownames(adtART@assays$tsa))
 
-adtART$individual <- str_match(adtART$orig.ident, "A\\d+")[,1]
+adtART$individual <- str_match(adtART$orig.ident, "\\w\\d{2}")[,1]
 
 adtART <- adtART %>%
   harmony::RunHarmony(group.by.vars = "individual", plot_convergence = TRUE, assay.use = "tsa")

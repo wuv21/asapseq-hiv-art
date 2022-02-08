@@ -26,9 +26,13 @@ source("common_scripts/clusterAnnotation.R")
 source("common_scripts/differentialExpression.R")
 source("common_scripts/ncbiSearcher.R")
 source("common_scripts/exportTsv.R")
+source("common_scripts/colorPalettes.R")
 
 #https://stackoverflow.com/questions/23279904/modifying-an-r-package-function-for-current-r-session-assigninnamespace-not-beh
 source("common_scripts/plotBrowserTrackCustom.R")
+
+select <- dplyr::select
+slice <- dplyr::slice
 
 tmpFun <- get("plotBrowserTrack", envir = asNamespace("ArchR"))
 environment(plotBrowserTrack2) <- environment(tmpFun)
@@ -37,7 +41,8 @@ attributes(plotBrowserTrack2) <- attributes(tmpFun)  # don't know if this is rea
 ```
 
 ```{r}
-addArchRThreads(threads = 2)
+addArchRThreads(threads = 2) # can adjust if more RAM is available (higher threads require more)
+set.seed(21) # for reproducibility
 ```
 
 ```{r}
@@ -65,12 +70,22 @@ projChronic <- haystackChronic$newProj
 ```
 
 ```{r}
-projART <- loadArchRProject(path = "A08A01_qcfiltTSS8/", showLogo = FALSE)
+# projART <- loadArchRProject(path = "A08A01_qcfiltTSS8/", showLogo = FALSE)
+projART <- loadArchRProject(path = "A08A01B45_qcfiltTSS8/", showLogo = FALSE)
+
 
 # add haystack data
 uniqSamples <- unique(projART$Sample)
 haystackSamplePairingART <- sapply(uniqSamples, function(i) {
-  newSampleName <- ifelse(grepl("A01", i), paste0(i, "_v3WithEnv_filtered"), paste0(i, "_v3"))
+  if (grepl("A01", i)) {
+    newSampleName <- paste0(i, "_v3WithEnv_filtered")
+  } else if (grepl("A08", i)) {
+    newSampleName <- paste0(i, "_v3")
+  } else {
+    newSampleName <- gsub("B45", "BEAT045", i)
+    newSampleName <- paste0(newSampleName, "_consensus")
+  }
+  
   return(newSampleName)
 })
 
@@ -129,9 +144,9 @@ projART_matched <- projART[ARTIntersectCbc, ]
 projART_matched <- addUMAP(ArchRProj = projART_matched,
   reducedDims = "Harmony",
   name = "UMAP2",
-  nNeighbors = 80,
+  nNeighbors = 100,
   force = TRUE,
-  minDist = 0.3)
+  minDist = 0.1)
 
 projART_matched <- addClusters(projART_matched,
   reducedDims = "Harmony",
@@ -139,7 +154,7 @@ projART_matched <- addClusters(projART_matched,
   name = "Clusters2",
   force = TRUE,
   maxClusters = NULL,
-  resolution = 1)
+  resolution = 0.75)
 
 projART_matched <- filterClusterByProp(projART_matched, 0.5, cluster = "Clusters2")
 adtART_matched <- subset(adtART, cells = projART_matched$cellNames)
@@ -148,7 +163,9 @@ adtART_matched <- subset(adtART, cells = projART_matched$cellNames)
 
 ```{r}
 # print out initial unlabeled umaps
-plotUmap(projInvitro_matched, colorBy = "Clusters2", fn = "InVitro_umap_unlabeledCluster", embedding = "UMAP2")
+plotUmap(projInvitro_matched, colorBy = "Clusters2", fn = "InVitro_umap_unlabeledCluster",
+  embedding = "UMAP2",
+  colorScheme = scale_color_manual(values = multiHueColorPalette))
 plotUmap(projInvitro_matched,
   colorBy = "haystackOut",
   bringToTop = TRUE,
@@ -157,7 +174,9 @@ plotUmap(projInvitro_matched,
   propInLegend = TRUE,
   fn = "InVitro_umap_haystackOut")
 
-plotUmap(projChronic_matched, colorBy = "Clusters2", fn = "chronic_umap_unlabeledCluster", embedding = "UMAP2")
+plotUmap(projChronic_matched, colorBy = "Clusters2", fn = "chronic_umap_unlabeledCluster",
+  embedding = "UMAP2",
+  colorScheme = scale_color_manual(values = multiHueColorPalette))
 plotUmap(projChronic_matched,
   colorBy = "haystackOut",
   bringToTop = TRUE,
@@ -167,7 +186,9 @@ plotUmap(projChronic_matched,
   fn = "chronic_umap_haystackOut")
 plotUmap(projChronic_matched, colorBy = "individual", fn = "chronic_umap_indivdiual", embedding = "UMAP2", devices = "png")
 
-plotUmap(projART_matched, colorBy = "Clusters2", fn = "art_umap_unlabeledCluster", embedding = "UMAP2")
+plotUmap(projART_matched, colorBy = "Clusters2",
+  fn = "art_umap_unlabeledCluster", embedding = "UMAP2",
+  colorScheme = scale_color_manual(values = multiHueColorPalette))
 plotUmap(projART_matched,
   colorBy = "haystackOut",
   bringToTop = TRUE,
@@ -211,6 +232,18 @@ getBaseATACPanel(projART_matched, "art_imputePanel", embedding = "UMAP2")
 getBasePanelAndMarkers(seu = adtART_matched, tsa_catalog, featuresToUse = ARTAdtToUse,
   findMarkerMethod = "wilcox",
   plotFn = "art_basepanel", tsvFn = "outs/tsv/art_initClusterMarkers.tsv")
+
+t(adtART_matched@assays$tsa@data[c("A0154", "A0386", "A0390"), ]) %>% 
+  as.data.frame(.) %>% 
+  mutate(x = Cells(adtART_matched),
+    y = adtART_matched$atacClusters) %>% 
+  pivot_longer(cols = -one_of(c("x", "y")), names_to = "metric", values_to = "val") %>%
+  group_by(metric, y) %>%
+  summarize(mean = mean(val)) %>%
+  arrange(metric, desc(y)) %>%
+  pivot_wider(names_from = "metric", values_from = "mean") %>%
+  View(.)
+
 ```
 
 
@@ -432,7 +465,7 @@ iv_topPeaks_g <- ggplot(invitro_markerTest_activatedPeaks_topPeaks %>% slice_max
     strip.background = element_blank(),
     strip.text = element_text(size = BASEPTFONTSIZE, margin = margin(0, 0, 0, 0)),
     text = element_text(family = "Arial", size = BASEPTFONTSIZE),
-    axis.text = element_text(size = 6, color = "#000000"),
+    axis.text = element_text(size = 7, color = "#000000", family = "Arial"),
     axis.title.y = element_blank(),
     legend.text = element_text(size = 6),
     legend.title = element_text(size = BASEPTFONTSIZE),
@@ -486,24 +519,6 @@ iv_ccr5_track <- plotBrowserTrack2(projInvitro_matched_gcPeak,
 
 cleanUpTrackAndSave(iv_ccr5_track, fn = "invitro_activated_ccr5")
 
-plotVolcanoFromGetMarkerFeatures(invitro_markerTest_tcm_activated,
-  fn = "invitro_peaks_volcano_tcmActivatedHIV")
-
-invitro_markerTest_tcm <- getMarkerFeatures(
-  ArchRProj = projInvitro_matched_gcPeak, 
-  useMatrix = "PeakMatrix",
-  groupBy = "condensedHivCluster",
-  testMethod = "wilcoxon",
-  bias = c("TSSEnrichment", "log10(nFrags)"),
-  useGroups = "Tcm_TRUE",
-  bgdGroups = "Tcm_FALSE",
-  maxCells = 1000,
-  verbose = FALSE
-)
-
-plotVolcanoFromGetMarkerFeatures(invitro_markerTest_tcm,
-  fn = "invitro_peaks_volcano_tcmHIV")
-
 # chromVAR analysis
 invitro_chromvar_markerTest <- getMarkerFeatures(
   ArchRProj = projInvitro_matched_gcPeak,
@@ -523,22 +538,138 @@ plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest, chromVARmode = TRU
 
 plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHIVneg", direction = "negative")
 plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHIVpos", direction = "positive")
+```
 
-invitro_chromvar_markerTest_tcm <- getMarkerFeatures(
-  ArchRProj = projInvitro_matched_gcPeak,
-  useMatrix = "MotifMatrix",
-  groupBy = "condensedHivCluster",
-  testMethod = "wilcoxon",
-  bias = c("TSSEnrichment", "log10(nFrags)"),
-  useGroups = "Tcm_TRUE",
-  bgdGroups = "Tcm_FALSE",
-  maxCells = 1000,
-  verbose = FALSE,
-  useSeqnames = "deviations"
+# model testing
+```{r}
+set.seed(21)
+
+getAssayData <- function(seu, cellNames, adtToUse) {
+  df <- as.data.frame(t(seu@assays$tsa@data[adtToUse, cellNames])) %>%
+    mutate(manualClusterAnnot = seu$manualClusterAnnot[cellNames],
+      haystackOut = ifelse(seu$haystackOut[cellNames], 1, 0)) %>%
+    dplyr::select(-manualClusterAnnot) %>%
+    mutate(haystackOut = factor(haystackOut))
+
+  sampleSplit <- caTools::sample.split(Y=df$haystackOut, SplitRatio = 0.7) 
+  trainSet <- subset(x = df, sampleSplit == TRUE)
+  testSet <- subset(x = df, sampleSplit == FALSE)
+  
+  return(list("train" = trainSet, "test" = testSet))
+}
+
+calcLogisticalRegression <- function(trainSet) {
+  lmModel <- glm(haystackOut ~ ., family = binomial(link='logit'), data = trainSet)
+  
+  return(lmModel)
+}
+
+calcNaiveBayes <- function(trainSet) {
+  bayesModel <- naivebayes::naive_bayes(haystackOut ~ ., data = trainSet, useKernel = TRUE)
+  return(bayesModel)
+}
+
+calcRandomForest <- function(trainSet, sampleProps = list(c(NULL, NULL), c(3,1), c(2,1), c(1, 1), c(0.5, 1))) {
+  trainSetTable <- table(trainSet$haystackOut)
+  
+  res <- lapply(sampleProps, function(prop) {
+    if (is.null(prop)) {
+      propCalculated <- sum(trainSetTable)
+    } else {
+      propCalculated <- c(trainSetTable[[2]] * prop[[1]], trainSetTable[[2]] * prop[[2]])
+    }
+    
+    rf <- randomForest::randomForest(
+      haystackOut ~ ., trainSet,
+      ntree = 4000,
+      sampsize = propCalculated,
+      strata = trainSet$haystackOut,
+      importance = TRUE)
+  })
+  
+  names(res) <- paste("RF (", sapply(sampleProps, paste, collapse = ":"), ")", sep = "")
+  names(res)[grep("RF \\(\\)", names(res))] <- "RF (all)"
+  
+  return(res)
+}
+
+getClassifierPrediction <- function(predicted, actual) {
+  if (class(predicted) == "prediction") {
+    pred <- predicted
+  } else {
+    pred <- ROCR::prediction(predicted, actual)
+  }
+  
+  return(pred)
+}
+
+getClassifierPerformance <- function(pred, perfMode = "roc") {
+  if (perfMode == "roc") {
+    perf <- ROCR::performance(pred, measure='tpr', x.measure='fpr')
+    
+  } else if (perfMode == "auc") {
+    perf <- ROCR::performance(pred, measure = perfMode)
+    
+    return(perf@y.values[[1]])
+    
+  } else {
+    perf <- ROCR::performance(pred, measure = perfMode)
+  }
+
+  return(perf)
+}
+
+
+invitroModelData <- getAssayData(adtInVitro_matched, names(invitro_tcells), inVitroAdtToUse)
+invitroLR <- calcLogisticalRegression(invitroModelData[["train"]])
+invitroNB <- calcNaiveBayes(invitroModelData[["train"]])
+invitroRF <- calcRandomForest(invitroModelData[["train"]])
+
+invitroRFPred <- lapply(invitroRF, function(x) {
+  pred <- getClassifierPrediction(predict(x, invitroModelData[["test"]], type = "prob")[, 2],
+    invitroModelData[["test"]]$haystackOut)
+  
+  return(pred)
+})
+names(invitroRFPred) <- names(invitroRF)
+
+invitroModelsPred <- list(
+  "logistic" = getClassifierPrediction(predict(invitroLR, invitroModelData[["test"]], type = 'response'),
+  invitroModelData[["test"]]$haystackOut),
+  "naive bayes" = getClassifierPrediction(predict(invitroNB, invitroModelData[["test"]], type = "prob")[, 2],
+  invitroModelData[["test"]]$haystackOut)
 )
 
-plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest_tcm, chromVARmode = TRUE,
-  fn = "invitro_volcano_motifs_chromVAR_tcm")
+invitroModelsPred <- base::append(invitroModelsPred, invitroRFPred)
+invitroModelsROC <- lapply(invitroModelsPred, getClassifierPerformance)
+invitroModelsAUC <- lapply(invitroModelsPred, getClassifierPerformance, perfMode = "auc")
+
+plotGgRoc(invitroModelsROC, "invitro_models")
+
+data.frame(cleanName = tsa_catalog[tsa_catalog$DNA_ID %in% inVitroAdtToUse, "cleanName"],
+  coeff = invitroLR$coefficients[-1],
+  p = coef(summary(invitroLR))[-1, 4]) %>% 
+  mutate(sig = case_when(
+    p < 0.05 & coeff > 0 ~ "Up in HIV+",
+    p < 0.05 & coeff < 0 ~ "Up in HIV-",
+    TRUE ~ "ns"
+  )) %>%
+  ggplot(aes(x = coeff, y = -log10(p), color = sig)) +
+  geom_point() +
+  theme_classic() +
+  scale_color_manual(values = c("#dddddd", HIVNEGCOLOR, HIVPOSCOLOR)) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "#cccccc") +
+  ggrepel::geom_text_repel(data = . %>% filter(sig != "ns"),
+    aes(label = cleanName), max.overlaps = 50, min.segment.length = 0.1, force = 2, size = 3) +
+  theme(legend.position = "none") +
+  labs(x = "log(odds ratio)",
+    y = "log(p)")
+
+randomForest::importance(invitroRF$`RF (all)`, type = "1") %>% 
+  as.data.frame(.) %>% 
+  arrange(desc(MeanDecreaseAccuracy)) %>%
+  mutate(DNA_ID = rownames(.)) %>%
+  left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID")
 ```
 
 
@@ -647,7 +778,7 @@ projChronic_matched_gcPeak <- addDeviationsMatrix(
   force = TRUE
 )
 
-chronic_markerTest <- getMarkerFeatures(
+chronic_markerTest_chromvar <- getMarkerFeatures(
   ArchRProj = projChronic_matched_gcPeak,
   useMatrix = "MotifMatrix",
   groupBy = "condensedHivCluster",
@@ -657,14 +788,14 @@ chronic_markerTest <- getMarkerFeatures(
   bgdGroups = "CD4_FALSE",
   maxCells = 1000,
   verbose = FALSE,
-  useSeqnames = "deviations"
+  useSeqnames = "z"
 )
 
-plotVolcanoFromGetMarkerFeatures(chronic_markerTest, chromVARmode = TRUE,
+plotVolcanoFromGetMarkerFeatures(chronic_markerTest_chromvar, chromVARmode = TRUE,
   fn = "chronic_volcano_motifs_chromVAR")
 
-plotMotifDot(chronic_markerTest, "chronic_chromVAR_motifsUp_HIVneg", direction = "negative")
-plotMotifDot(chronic_markerTest, "chronic_chromVAR_motifsUp_HIVpos", direction = "positive")
+plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVneg", direction = "negative")
+plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVpos", direction = "positive")
 ```
 
 
@@ -681,24 +812,6 @@ art_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
 
 makeDifferentialLollipop(art_markers, "art_lollipop")
 exportTsv(art_markers)
-
-art_apc_check <- (grepl("APC", adtART_matched$manualClusterAnnot))
-art_apc <- adtART_matched$haystackOut[art_apc_check]
-
-VlnPlot(subset(adtART_matched, cells = names(art_apc)), features = c("A0072", "A0081", "A0034"), group.by = "haystackOut")
-
-
-art_ccr5_track <- plotBrowserTrack2(projART_matched,
-  geneSymbol = "CD5",
-  useGroups = c("T cell_FALSE", "T cell_TRUE"),
-  groupBy = "condensedHivCluster",
-  upstream = 10000, downstream = 10000,
-  scCellsMax = 750,
-  plotSummary = c("bulkTrack", "scTracK", "geneTrack"),
-  pal = c(HIVNEGCOLOR, HIVPOSCOLOR), borderWidth = 0, sizes = c(2,2,1))$CD5
-
-cleanUpTrackAndSave(art_ccr5_track, fn = "art_ccr5")
-grid::grid.draw(plotBrowserTrack(projART_matched, plotSummary = c("bulkTrack", "scTrack", "geneTrack"), groupBy = "condensedHivCluster", geneSymbol = "SELPLG", scCellsMax = 300, sizes = c(2, 4, 2))$`SELPLG`)
 
 plotVlnEnhanced(adtART_matched, cells = names(art_tcells),
   feats = art_markers$gene,
@@ -723,7 +836,7 @@ projART_matched <- addCellColData(ArchRProj = projART_matched,
 projART_matched <- addGroupCoverages(ArchRProj = projART_matched,
   groupBy = "condensedHivCluster",
   minReplicates = 2,
-  minCells = 15,
+  minCells = 16,
   sampleRatio = 0.95,
   force = TRUE)
 
@@ -735,7 +848,7 @@ projART_matched <- addReproduciblePeakSet(
 
 projART_matched <- addPeakMatrix(projART_matched, force = TRUE)
 
-if("Motif" %ni% names(projART_matched@peakAnnotation)){
+if ("Motif" %ni% names(projART_matched@peakAnnotation)) {
     projART_matched <- addMotifAnnotations(ArchRProj = projART_matched, motifSet = "cisbp", name = "Motif")
 }
 
@@ -749,7 +862,32 @@ projART_matched <- addDeviationsMatrix(
 
 saveArchRProject(projART_matched)
 
+if("EncodeTFBS" %ni% names(projART_matched@peakAnnotation)){
+    projART_matched <- addArchRAnnotations(ArchRProj = projART_matched, collection = "EncodeTFBS")
+}
+
+projART_matched <- addDeviationsMatrix(
+  ArchRProj = projART_matched, 
+  peakAnnotation = "EncodeTFBS",
+  force = TRUE
+)
+
 art_markerTest <- getMarkerFeatures(
+  ArchRProj = projART_matched, 
+  useMatrix = "PeakMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "T cell_TRUE",
+  bgdGroups = "T cell_FALSE",
+  maxCells = 1000,
+  verbose = FALSE
+)
+
+plotVolcanoFromGetMarkerFeatures(art_markerTest, chromVARmode = FALSE,
+  fn = "art_volcano")
+
+art_markerTest_deviations <- getMarkerFeatures(
   ArchRProj = projART_matched, 
   useMatrix = "MotifMatrix",
   groupBy = "condensedHivCluster",
@@ -759,10 +897,10 @@ art_markerTest <- getMarkerFeatures(
   bgdGroups = "T cell_FALSE",
   maxCells = 1000,
   verbose = FALSE,
-  useSeqnames = "deviations"
+  useSeqnames = "z"
 )
 
-plotVolcanoFromGetMarkerFeatures(art_markerTest, chromVARmode = TRUE,
+plotVolcanoFromGetMarkerFeatures(art_markerTest_deviations, chromVARmode = TRUE,
   fn = "art_volcano_motifs_chromVAR")
 ```
 
@@ -871,7 +1009,6 @@ plotFragMultiGraph(frags = chronicFrags_matched, coverage = rep(0, 9719), geneAn
 calculateLTRVersusInternal(chronicFrags_matched, 633, 9085, 9718)
 
 artFrags_matched <- haystackART$filteredviralFrags[haystackART$filteredviralFrags$newCbc %in% projART_matched$cellNames, ]
-artVirusGeneAnnots <- downloadTables(unique(artFrags_matched$seqname))
 
 checkFragmentOverlap <- function(q1, q2, s1, s2) {
   if (q1 <= s2 & q1 >= s1) {
@@ -886,14 +1023,23 @@ checkFragmentOverlap <- function(q1, q2, s1, s2) {
   return(FALSE)
 }
 
+artConsensusAnnots <- read.csv("viralGenomeAnnotations/GeneCutterParser_A08_A01_BEAT045.tsv", sep = "\t") %>%
+  filter(annotation != "Genome") %>%
+  mutate(annotation = tolower(annotation)) %>%
+  mutate(annotation = ifelse(grepl("ltr", annotation), "LTR", annotation)) %>%
+  bind_rows(hxb2GeneAnnots %>% dplyr::select(-annotation2) %>% mutate(genome = "chrHXB2")) %>%
+  group_split(genome)
+
+names(artConsensusAnnots) <- sapply(artConsensusAnnots, function(x) {return(x[1, "genome"])})
+
 artFrags_matchedWithAnnot <- lapply(seq_along(artFrags_matched$sample), function(i) {
   seqname <- artFrags_matched[i, "seqname"]
-  seqnameAnnots <- artVirusGeneAnnots[[seqname]]
-  
+  seqnameAnnots <- artConsensusAnnots[[seqname]]
+
   if (is.null(seqnameAnnots)) {
     return(NULL)
   }
-  
+
   q1 <- artFrags_matched[i, "startBp"]
   q2 <- artFrags_matched[i, "endBp"]
 
@@ -903,13 +1049,13 @@ artFrags_matchedWithAnnot <- lapply(seq_along(artFrags_matched$sample), function
     artFrags_matched[i, "startBp"],
     artFrags_matched[i, "endBp"],
     artFrags_matched[i, "readname"], sep = "")
-  
+
   matches <- lapply(seq_along(seqnameAnnots$annotation), function(i) {
     s1 <- seqnameAnnots$startPos[i]
     s2 <- seqnameAnnots$endPos[i]
-    
+
     check <- checkFragmentOverlap(q1, q2, s1, s2)
-    
+
     if (check) {
       return(data.frame(id = id, annot = seqnameAnnots$annotation[i]))
     } else {
@@ -921,9 +1067,8 @@ artFrags_matchedWithAnnot <- lapply(seq_along(artFrags_matched$sample), function
 })
 
 artFrags_matchedWithAnnot <- bind_rows(artFrags_matchedWithAnnot)
-plogFragMultiAnnotGraph(artFrags_matched, artFrags_matchedWithAnnot, unique(hxb2GeneAnnots$annotation), fn = "art_frags")
+plogFragMultiAnnotGraph(artFrags_matched, artFrags_matchedWithAnnot, unique(hxb2GeneAnnots$annotation), fn = "art_frags2")
 ```
-
 
 # get numbers for manuscript
 ```{r}
