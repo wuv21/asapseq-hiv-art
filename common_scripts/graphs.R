@@ -353,8 +353,15 @@ clean_VlnPlot <- function(gList, finalplotCol = 5, newTitle = c()) {
 
 
 # cell plot
-makeCellPlot <- function(seu, tsa_catalog, cellID,
-  outputDir, outputFn = glue("cellplot_{cellID}.png")) {
+makeCellPlot <- function(seu,
+  tsa_catalog,
+  cellID,
+  outputDir,
+  labelFeatures = FALSE,
+  colorByHaystack = NULL,
+  plotMargin = -0.5,
+  yLimMin = -1,
+  outputFn = glue("cellplot_{cellID}.png")) {
   
   cellIDData <- seu@assays$tsa@data[, cellID]
   
@@ -372,9 +379,12 @@ makeCellPlot <- function(seu, tsa_catalog, cellID,
       barFill = ifelse(label != "", "#e63946", "#999999"))
   
   
+  if (!is.null(colorByHaystack)) {
+    singleAdtDf$barFill <- ifelse(colorByHaystack, HIVPOSCOLOR, HIVNEGCOLOR)
+  }
+  
   cellPlt <- ggplot(singleAdtDf, aes(x = cleanName, y = normExp)) +
     geom_bar(stat = "identity", alpha = 0.8, aes(fill = barFill), width = 0.4) +
-    # scale_fill_distiller(palette = "Accent") +
     scale_fill_identity() +
     theme_minimal() +
     theme(
@@ -382,16 +392,22 @@ makeCellPlot <- function(seu, tsa_catalog, cellID,
       axis.text = element_blank(),
       axis.title = element_blank(),
       panel.grid = element_blank(),
-      plot.margin = unit(rep(-0.5, 4), "in")
+      plot.margin = unit(rep(plotMargin, 4), "in")
     ) +
-    ylim(-1, max(singleAdtDf$normExp, na.rm = T) + 0.5) +
-    geom_text(aes(x = cleanName, y = normExp + 0.1, label = label, hjust = hjust, angle = angle),
-      color="black", alpha = 0.6, size = 2.25, inherit.aes = FALSE) +
+    ylim(yLimMin, max(singleAdtDf$normExp, na.rm = T) + 0.5) +
     coord_polar()
+    
+  if (labelFeatures) {
+    cellPlt <- cellPlt +
+      geom_text(aes(x = cleanName, y = normExp + 0.1, label = label, hjust = hjust, angle = angle),
+        color="black", alpha = 0.6, size = 2.25, inherit.aes = FALSE)
+  }
   
-  ggsave(filename = paste0(outputDir, "/", outputFn),
-    plot = cellPlt, width = 8, height = 8,
-    dpi = "retina", bg = "#FFFFFF")
+  if (!is.null(outputFn)) {
+    ggsave(filename = paste0(outputDir, "/", outputFn),
+      plot = cellPlt, width = 5, height = 5,
+      dpi = "retina", bg = "transparent")
+  }
   
   return(cellPlt)
 }
@@ -536,7 +552,8 @@ plotVolcanoFromGetMarkerFeatures <- function(
   posFoldChangeName = "Upregulated in HIV+",
   negFoldChageName = "Downregulated in HIV+",
   devices = c("png", "rds"),
-  chromVARmode = FALSE
+  chromVARmode = FALSE,
+  returnDf = FALSE
 ) {
   if (chromVARmode) {
       df <- data.frame(
@@ -561,6 +578,10 @@ plotVolcanoFromGetMarkerFeatures <- function(
       y > -1 * log10(0.05) & x < 0 ~ negFoldChageName,
       TRUE ~ "Not significant"
     ))
+  
+  if (returnDf) {
+    return(df)
+  }
   
   g <- df %>%  
     {ggplot(data = ., aes(x = x, y = y, color = pointColor)) +
@@ -1004,10 +1025,12 @@ cleanUpTrackAndSave <- function(
 
 plotGgRoc <- function(
   perf,
+  auc,
   fn,
+  returnDf = FALSE,
   devices = c("rds", "png"),
-  gheight = 3,
-  gwidth = 3
+  gheight = 4,
+  gwidth = 4
 ) {
   if (typeof(perf) == "list") {
     dfs <- lapply(perf, function(pe) {
@@ -1029,6 +1052,13 @@ plotGgRoc <- function(
     )
   }
   
+  
+  df$colorVar <- paste0(df$colorVar, " (AUC=", round(unlist(auc[df$colorVar]), digits = 2), ")")
+  
+  if (returnDf) {
+    return(df)
+  }
+  
   g <- ggplot(df, aes(x = x, y = y, color = colorVar)) +
     geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), linetype = "dashed", color = "#cccccc") +
     geom_path() +
@@ -1036,6 +1066,7 @@ plotGgRoc <- function(
     theme_classic() +
     scale_x_continuous(limits = c(0,1), expand = c(0, 0.01)) +
     scale_y_continuous(limits = c(0,1), expand = c(0, 0.01)) +
+    guides(color = guide_legend(nrow = 3)) +
     coord_fixed() +
     theme(
       text = element_text(family = "Arial", size = BASEPTFONTSIZE, color = "#000000"),
@@ -1047,4 +1078,67 @@ plotGgRoc <- function(
     )
   
   savePlot(g, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}
+
+plotLogitRegressionVolcano <- function(
+  logModel,
+  tsaCatalog,
+  adtToUse,
+  fn,
+  devices = c("rds", "png"),
+  gheight = 3.5,
+  gwidth = 3.5
+) {
+  
+  df <- data.frame(cleanName = tsaCatalog[tsaCatalog$DNA_ID %in% adtToUse, "cleanName"],
+    coeff = logModel$coefficients[-1],
+    p = coef(summary(logModel))[-1, 4]) %>% 
+    mutate(sig = case_when(
+      p < 0.05 & coeff > 0 ~ "Up in HIV+",
+      p < 0.05 & coeff < 0 ~ "Up in HIV-",
+      TRUE ~ "ns"
+    ))
+  
+  sigPos <- df %>%
+    filter(sig != "ns" & coeff > 0)
+  
+  sigNeg <- df %>%
+    filter(sig != "ns" & coeff < 0)
+  
+  commonGeomTextRepelSettings <- list(
+    direction = "y",
+    force = 10,
+    size = 2, ylim = c(1.5, 8), segment.size = 0.25
+  )
+  
+  sigPosSettings <- list(
+    xlim = c(1.25, 2),
+    hjust = 0,
+    segment.colour = paste0(HIVPOSCOLOR, "50")
+  )
+  
+  sigNegSettings <- list(
+    xlim = c(-2, -1.25),
+    hjust = 1,
+    segment.colour = paste0(HIVNEGCOLOR, "50")
+  )
+  
+  p <- ggplot(df, aes(x = coeff, y = -log10(p), color = sig)) +
+    geom_point() +
+    theme_classic() +
+    scale_color_manual(values = c("#dddddd", HIVNEGCOLOR, HIVPOSCOLOR)) +
+    geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "#cccccc") +
+    # scale_x_continuous(limits = c(-2, 2)) +
+    do.call(ggrepel::geom_text_repel,
+      c(list(data = sigPos, aes(label = cleanName)), sigPosSettings, commonGeomTextRepelSettings)) +
+    do.call(ggrepel::geom_text_repel,
+      c(list(data = sigNeg, aes(label = cleanName)), sigNegSettings, commonGeomTextRepelSettings)) +
+    theme(
+      legend.position = "none",
+      axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000", family = "Arial"),
+      text = element_text(size = BASEPTFONTSIZE, color = "#000000", family = "Arial")) +
+    labs(x = "log(odds ratio)",
+      y = "log(p)")
+  
+  savePlot(p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }

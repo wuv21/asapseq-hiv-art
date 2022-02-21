@@ -544,14 +544,14 @@ plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHI
 ```{r}
 set.seed(21)
 
-getAssayData <- function(seu, cellNames, adtToUse) {
+getAssayData <- function(seu, cellNames, adtToUse, splitRatio = 0.7) {
   df <- as.data.frame(t(seu@assays$tsa@data[adtToUse, cellNames])) %>%
     mutate(manualClusterAnnot = seu$manualClusterAnnot[cellNames],
       haystackOut = ifelse(seu$haystackOut[cellNames], 1, 0)) %>%
     dplyr::select(-manualClusterAnnot) %>%
     mutate(haystackOut = factor(haystackOut))
 
-  sampleSplit <- caTools::sample.split(Y=df$haystackOut, SplitRatio = 0.7) 
+  sampleSplit <- caTools::sample.split(Y=df$haystackOut, SplitRatio = splitRatio) 
   trainSet <- subset(x = df, sampleSplit == TRUE)
   testSet <- subset(x = df, sampleSplit == FALSE)
   
@@ -644,33 +644,100 @@ invitroModelsPred <- base::append(invitroModelsPred, invitroRFPred)
 invitroModelsROC <- lapply(invitroModelsPred, getClassifierPerformance)
 invitroModelsAUC <- lapply(invitroModelsPred, getClassifierPerformance, perfMode = "auc")
 
-plotGgRoc(invitroModelsROC, "invitro_models")
+plotGgRoc(invitroModelsROC, invitroModelsAUC, "invitro_models")
 
-data.frame(cleanName = tsa_catalog[tsa_catalog$DNA_ID %in% inVitroAdtToUse, "cleanName"],
-  coeff = invitroLR$coefficients[-1],
-  p = coef(summary(invitroLR))[-1, 4]) %>% 
-  mutate(sig = case_when(
-    p < 0.05 & coeff > 0 ~ "Up in HIV+",
-    p < 0.05 & coeff < 0 ~ "Up in HIV-",
-    TRUE ~ "ns"
-  )) %>%
-  ggplot(aes(x = coeff, y = -log10(p), color = sig)) +
-  geom_point() +
-  theme_classic() +
-  scale_color_manual(values = c("#dddddd", HIVNEGCOLOR, HIVPOSCOLOR)) +
-  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "#cccccc") +
-  ggrepel::geom_text_repel(data = . %>% filter(sig != "ns"),
-    aes(label = cleanName), max.overlaps = 50, min.segment.length = 0.1, force = 2, size = 3) +
-  theme(legend.position = "none") +
-  labs(x = "log(odds ratio)",
-    y = "log(p)")
+plotLogitRegressionVolcano(invitroLR, tsa_catalog, inVitroAdtToUse, "invitro_logitRegression_volcano")
 
 randomForest::importance(invitroRF$`RF (all)`, type = "1") %>% 
   as.data.frame(.) %>% 
   arrange(desc(MeanDecreaseAccuracy)) %>%
   mutate(DNA_ID = rownames(.)) %>%
-  left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID")
+  left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID") %>%
+  head(n = 10)
+
+# invitro activated
+invitroActModelData <- getAssayData(adtInVitro_matched, names(invitro_activeLaterCells), inVitroAdtToUse)
+invitroActLR <- calcLogisticalRegression(invitroActModelData[["train"]])
+invitroActNB <- calcNaiveBayes(invitroActModelData[["train"]])
+invitroActRF <- calcRandomForest(invitroActModelData[["train"]], sampleProps = list(c(NULL, NULL), c(1, 1), c(0.5, 1)))
+
+invitroActRFPred <- lapply(invitroActRF, function(x) {
+  pred <- getClassifierPrediction(predict(x, invitroActModelData[["test"]], type = "prob")[, 2],
+    invitroActModelData[["test"]]$haystackOut)
+  
+  return(pred)
+})
+names(invitroActRFPred) <- names(invitroActRF)
+
+invitroActModelsPred <- list(
+  "logistic" = getClassifierPrediction(predict(invitroActLR, invitroActModelData[["test"]], type = 'response'),
+  invitroActModelData[["test"]]$haystackOut),
+  "naive bayes" = getClassifierPrediction(predict(invitroActNB, invitroActModelData[["test"]], type = "prob")[, 2],
+  invitroActModelData[["test"]]$haystackOut)
+)
+
+invitroActModelsPred <- base::append(invitroActModelsPred, invitroActRFPred)
+invitroActModelsROC <- lapply(invitroActModelsPred, getClassifierPerformance)
+invitroActModelsAUC <- lapply(invitroActModelsPred, getClassifierPerformance, perfMode = "auc")
+
+plotGgRoc(invitroActModelsROC, invitroActModelsAUC,"invitro_models_activated")
+
+
+randomForest::importance(invitroActRF$`RF (all)`, type = "1") %>% 
+  as.data.frame(.) %>% 
+  arrange(desc(MeanDecreaseAccuracy)) %>%
+  mutate(DNA_ID = rownames(.)) %>%
+  left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID") %>%
+  head(n = 10)
 ```
+
+```{r}
+tmpGraphicalAbsCellPlots <- function() {
+  # tmp working area for graphical abstract
+  ccr5Start <- 46370946
+  ccr5End <- 46376206
+  
+  df <- as.data.frame(tmp$ND497_B) %>% 
+    mutate(status = invitro_activeLaterCells[RG]) %>% 
+    filter(!is.na(status)) %>%
+    group_by(status) %>%
+    arrange(status) %>%
+    mutate(RG = factor(RG, levels = unique(RG))) %>%
+    slice_sample(n = 85)
+  
+  cpCellNames <- df %>%
+    slice_sample(n = 3)
+  
+  atacPlot <- ggplot(df, aes(x = start, xend = end, y = RG, yend = RG)) +
+    annotate("rect", xmin = ccr5Start, xmax = ccr5End, ymin = -Inf, ymax = Inf, fill = "#0000ff30") +
+    geom_segment(aes(color = ifelse(status, HIVPOSCOLOR, HIVNEGCOLOR)), size = 0.5) +
+    theme_minimal() +
+    xlim(ccr5Start - 5000, ccr5End + 5000) +
+    scale_color_identity() +
+    theme(axis.text.y = element_blank(),
+        panel.grid.major.y = element_line(color = "#eeeeee", size = 0.2),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_rect(fill = "transparent", color = "transparent"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())    
+  
+  ggsave("outs/graphicalAbsTmp.svg", width = 1.6, height = 3)
+
+  lapply(cpCellNames$RG, function(x) {
+    makeCellPlot(
+      adtInVitro_matched,
+      cellID = as.character(x),
+      tsa_catalog = tsa_catalog,
+      outputDir = "outs",
+      colorByHaystack = adtInVitro_matched$haystackOut[as.character(x)],
+      plotMargin = -1)
+  }) 
+}
+
+tmpGraphicalAbsCellPlots()
+```
+
 
 
 ## Chronic differential analysis
@@ -799,6 +866,47 @@ plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVpos", di
 ```
 
 
+# chronic models
+```{r}
+set.seed(21)
+
+chronicModelData <- getAssayData(adtChronic_matched, names(chronic_tcells), chronicAdtToUse, splitRatio = 0.7)
+chronicLR <- calcLogisticalRegression(chronicModelData[["train"]])
+chronicNB <- calcNaiveBayes(chronicModelData[["train"]])
+chronicRF <- calcRandomForest(chronicModelData[["train"]],
+  sampleProps = list(c(NULL, NULL), c(5, 1), c(10, 1)))
+
+chronicRFPred <- lapply(chronicRF, function(x) {
+  pred <- getClassifierPrediction(predict(x, chronicModelData[["test"]], type = "prob")[, 2],
+    chronicModelData[["test"]]$haystackOut)
+  
+  return(pred)
+})
+names(chronicRFPred) <- names(chronicRF)
+
+chronicModelsPred <- list(
+  "logistic" = getClassifierPrediction(predict(chronicLR, chronicModelData[["test"]], type = 'response'),
+  chronicModelData[["test"]]$haystackOut),
+  "naive bayes" = getClassifierPrediction(predict(chronicNB, chronicModelData[["test"]], type = "prob")[, 2],
+  chronicModelData[["test"]]$haystackOut)
+)
+
+chronicModelsPred <- base::append(chronicModelsPred, chronicRFPred)
+chronicModelsROC <- lapply(chronicModelsPred, getClassifierPerformance)
+chronicModelsAUC <- lapply(chronicModelsPred, getClassifierPerformance, perfMode = "auc")
+
+plotGgRoc(chronicModelsROC, chronicModelsAUC, "chronic_models")
+plotLogitRegressionVolcano(chronicLR, tsa_catalog, chronicAdtToUse, "chronic_logitRegression_volcano")
+
+randomForest::importance(chronicRF$`RF (all)`, type = "1") %>% 
+  as.data.frame(.) %>% 
+  arrange(desc(MeanDecreaseAccuracy)) %>%
+  mutate(DNA_ID = rownames(.)) %>%
+  left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID") %>%
+  head(n = 10)
+```
+
+
 ## ART differential analysis
 ```{r}
 art_tcells_check <- (grepl("CD4", adtART_matched$manualClusterAnnot))
@@ -818,6 +926,35 @@ plotVlnEnhanced(adtART_matched, cells = names(art_tcells),
   separator = art_markers$Status,
   titles = art_markers$cleanName,
   fn = "art_tcells_vln")
+
+art_other_check <- (grepl("(APC|Other)", adtART_matched$manualClusterAnnot))
+art_OtherCells <- adtART_matched$haystackOut[art_other_check]
+art_markers_other <- findHIVDifferentialMarkers(seu = adtART_matched,
+  cellsPos = names(art_OtherCells[art_OtherCells]),
+  cellsNeg = names(art_OtherCells[!art_OtherCells]),
+  featuresToUse = ARTAdtToUse,
+  findMarkerMethod = "wilcox",
+  tsa_catalog = tsa_catalog)
+
+makeDifferentialLollipop(art_markers_other, "art_lollipop_other")
+exportTsv(art_markers_other)
+
+tmp <- data.frame(CD4 = adtART_matched@assays$tsa@data["A0072", ],
+  CD3 = adtART_matched@assays$tsa@data["A0034", ], 
+  CD5 = adtART_matched@assays$tsa@data["A0138", ],
+  CD14 = adtART_matched@assays$tsa@data["A0081", ],
+  manualClusterAnnot = adtART_matched$manualClusterAnnot,
+  haystackOut = adtART_matched$haystackOut) %>%
+  pivot_longer(cols = c("CD4", "CD3", "CD5", "CD14"), names_to = "marker", values_to = "expression")
+
+ggplot(mapping = aes(x = manualClusterAnnot, y = expression)) +
+  geom_hline(yintercept = 2, color = "#cccccc") +
+  geom_violin(data = tmp %>% filter(!haystackOut), fill = HIVNEGCOLOR, color = "#333333") +
+  geom_point(data = tmp %>% filter(haystackOut), shape = 21, fill = HIVPOSCOLOR, color = "#000000") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  facet_wrap(~ marker, ncol = 1, scales = "free_y", strip.position = "right") +
+  labs(x = "Cluster", y = "Expression")
 
 art_renamingDF <- getCellColData(projART_matched, select = c("haystackOut", "manualClusterAnnot")) %>%
   as.data.frame(.) %>%
@@ -880,18 +1017,34 @@ art_markerTest <- getMarkerFeatures(
   bias = c("TSSEnrichment", "log10(nFrags)"),
   useGroups = "T cell_TRUE",
   bgdGroups = "T cell_FALSE",
-  maxCells = 1000,
+  maxCells = 500,
   verbose = FALSE
 )
 
-plotVolcanoFromGetMarkerFeatures(art_markerTest, chromVARmode = FALSE,
-  fn = "art_volcano")
+plotVolcanoFromGetMarkerFeatures(art_markerTest, chromVARmode = FALSE, fn = "art_volcano")
 
 art_markerTest_deviations <- getMarkerFeatures(
   ArchRProj = projART_matched, 
   useMatrix = "MotifMatrix",
   groupBy = "condensedHivCluster",
-  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "T cell_TRUE",
+  bgdGroups = "T cell_FALSE",
+  maxCells = 500,
+  verbose = FALSE,
+  useSeqnames = "z",
+)
+
+plotVolcanoFromGetMarkerFeatures(art_markerTest_deviations, chromVARmode = TRUE,
+  fn = "art_volcano_motifs_chromVAR")
+plotMotifDot(art_markerTest_deviations, "art_chromVAR_motifsUp_HIVneg", direction = "negative")
+plotMotifDot(art_markerTest_deviations, "art_chromVAR_motifsUp_HIVpos", direction = "positive")
+
+
+art_markerTest_encode_deviations <- getMarkerFeatures(
+  ArchRProj = projART_matched, 
+  useMatrix = "EncodeTFBSMatrix",
+  groupBy = "condensedHivCluster",
   bias = c("TSSEnrichment", "log10(nFrags)"),
   useGroups = "T cell_TRUE",
   bgdGroups = "T cell_FALSE",
@@ -900,8 +1053,48 @@ art_markerTest_deviations <- getMarkerFeatures(
   useSeqnames = "z"
 )
 
-plotVolcanoFromGetMarkerFeatures(art_markerTest_deviations, chromVARmode = TRUE,
-  fn = "art_volcano_motifs_chromVAR")
+plotVolcanoFromGetMarkerFeatures(art_markerTest_encode_deviations, chromVARmode = TRUE,
+  fn = "art_volcano_motifs_chromVAR_encode")
+```
+
+# art models
+```{r}
+set.seed(21)
+
+artModelData <- getAssayData(adtART_matched, names(art_tcells), ARTAdtToUse, splitRatio = 0.7)
+artLR <- calcLogisticalRegression(artModelData[["train"]])
+artNB <- calcNaiveBayes(artModelData[["train"]])
+artRF <- calcRandomForest(artModelData[["train"]],
+  sampleProps = list(c(NULL, NULL), c(5, 1), c(10, 1)))
+
+artRFPred <- lapply(artRF, function(x) {
+  pred <- getClassifierPrediction(predict(x, artModelData[["test"]], type = "prob")[, 2],
+    artModelData[["test"]]$haystackOut)
+  
+  return(pred)
+})
+names(artRFPred) <- names(artRF)
+
+artModelsPred <- list(
+  "logistic" = getClassifierPrediction(predict(artLR, artModelData[["test"]], type = 'response'),
+  artModelData[["test"]]$haystackOut),
+  "naive bayes" = getClassifierPrediction(predict(artNB, artModelData[["test"]], type = "prob")[, 2],
+  artModelData[["test"]]$haystackOut)
+)
+
+artModelsPred <- base::append(artModelsPred, artRFPred)
+artModelsROC <- lapply(artModelsPred, getClassifierPerformance)
+artModelsAUC <- lapply(artModelsPred, getClassifierPerformance, perfMode = "auc")
+
+plotGgRoc(artModelsROC, artModelsAUC, "art_models")
+# plotLogitRegressionVolcano(artLR, tsa_catalog, ARTAdtToUse, "art_logitRegression_volcano")
+
+randomForest::importance(artRF$`RF (all)`, type = "1") %>% 
+  as.data.frame(.) %>% 
+  arrange(desc(MeanDecreaseAccuracy)) %>%
+  mutate(DNA_ID = rownames(.)) %>%
+  left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID") %>%
+  head(n = 10)
 ```
 
 # qc metrics

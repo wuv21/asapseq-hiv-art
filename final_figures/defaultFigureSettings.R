@@ -3,6 +3,9 @@ library(patchwork)
 library(png)
 library(ggpubr)
 library(glue)
+suppressMessages(library(tidyr))
+suppressMessages(library(dplyr))
+suppressMessages(library(stringr))
 
 subplotTheme <- theme(
   plot.title.position = "plot",
