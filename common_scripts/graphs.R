@@ -4,7 +4,7 @@ library(gghalves)
 # COLOR SCHEMES
 ######
 HIVPOSCOLOR <- "#e63946"
-HIVNEGCOLOR <- "#aaaaaa"
+HIVNEGCOLOR <- "#999999"
 BASEPTAXISFONTSIZE <- 7
 BASEPTFONTSIZE <- 7
 BASEFONTSIZE <- BASEPTFONTSIZE / ggplot2:::.pt
@@ -38,6 +38,7 @@ generateUmapDfFromArchR <- function(
   proj,
   secondGraphColumn = "haystackOut",
   cluster = "Clusters",
+  colorLabelCluster = NULL,
   embedding = "UMAP") {
   
   umapFromArchr <- getEmbedding(proj, embedding = embedding)
@@ -45,8 +46,21 @@ generateUmapDfFromArchR <- function(
   df <- data.frame(x = umapFromArchr[, 1],
     y = umapFromArchr[, 2],
     secondMetadata = getCellColData(proj, select = secondGraphColumn)[, 1],
-    sample = proj$Sample,
-    cluster = getCellColData(proj, select = cluster)[, 1])
+    sample = proj$Sample)
+    
+  
+  if (is.vector(cluster)) {
+    tmp <- getCellColData(proj, select = cluster)
+    tmp <- unite(as.data.frame(tmp), col = "tmp", sep = ": ")
+    df$cluster <- tmp$tmp
+    
+  } else {
+    df$cluster <- getCellColData(proj, select = cluster)[, 1]
+  }
+  
+  if (!is.null(colorLabelCluster)) {
+    df$colorLabelCluster <- getCellColData(proj, select = colorLabelCluster)[, 1]
+  }
   
   return(df)
 }
@@ -77,23 +91,23 @@ plotUmap <- function(
   devices = c("png", "rds"),
   ggtheme = umapTheme,
   colorBy = "Clusters",
-  colorByLabel = colorBy,
+  colorLabelBy = colorBy,
+  colorLabel = colorBy,
   colorScheme = NULL,
-  labelColors = TRUE,
   rasterize = TRUE,
   bringToTop = FALSE,
   propInLegend = FALSE,
   propDigits = 1,
   embedding = "UMAP") {
   
-  df <- generateUmapDfFromArchR(proj, cluster = colorBy, embedding = embedding)
+  df <- generateUmapDfFromArchR(proj, cluster = colorBy, embedding = embedding, colorLabelCluster = colorLabelBy)
   
   if (bringToTop) {
     df <- df %>%
       arrange(cluster)
   }
   
-  if (colorBy == "haystackOut") {
+  if (length(colorBy) == 1 & colorBy == "haystackOut") {
     df <- df %>%
       mutate(cluster = ifelse(cluster, "HIV+", "HIV-"))
   }
@@ -113,32 +127,32 @@ plotUmap <- function(
   }
   
   p1 <- p1 +
-  labs(x = "UMAP 1",
-    y = "UMAP 2",
-    color = colorByLabel) +
-  theme_classic() +
-  ggtheme +
-  guides(colour = guide_legend(override.aes = list(size = 4), nrow = 5))
+    labs(x = "UMAP 1",
+      y = "UMAP 2",
+      color = colorLabel) +
+    theme_classic() +
+    ggtheme +
+    guides(colour = guide_legend(override.aes = list(size = 4), nrow = 5))
     
-  if (is.null(colorScheme) & colorBy == "haystackOut") {
+  if (is.null(colorScheme) & length(colorBy) == 1 & colorBy == "haystackOut") {
     p1 <- p1 + scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR))
   } else if (!is.null(colorScheme)) {
     p1 <- p1 + colorScheme
   }
   
-  if (labelColors) {
+  if (!is.null(colorBy) & !is.null(colorLabelBy)) {
     clusterLabelUmapPos <- df %>% 
-      group_by(cluster) %>% 
+      group_by(colorLabelCluster) %>% 
       summarize(medianX = median(x),
         medianY = median(y),
-        iqrXFactor = IQR(x) / 1.5,
-        iqrYFactor = IQR(y) / 1.5,
+        iqrXFactor = IQR(x) * 0.4,
+        iqrYFactor = IQR(y) * 0.4,
         x = mean(x[x > (medianX - iqrXFactor) & x < (iqrXFactor + medianX)]),
         y = mean(y[y > (medianY - iqrYFactor) & y < (iqrYFactor + medianY)]))
     
     p1 <- p1 + 
       ggrepel::geom_label_repel(data = clusterLabelUmapPos,
-        aes(x = x, y = y, label = cluster),
+        aes(x = x, y = y, label = colorLabelCluster),
         label.size = 0.05,
         size = BASEFONTSIZE,
         segment.color = NA)
@@ -415,7 +429,7 @@ makeCellPlot <- function(seu,
 makeDifferentialLollipop <- function(
   markers,
   fn,
-  devices = c("png", "svg", "rds")) {
+  devices = c("png", "rds")) {
   
   pSapPi <- markers %>%
     arrange(desc(abs(piScore)), .by_group = TRUE) %>%
@@ -477,23 +491,20 @@ plotMotifRank <- function(
   df <- df %>%
     mutate(color = ifelse(y > -log10(0.05), color, "#DDDDDD"))
   
+  yMax <- max(df$y)
+  yMin <- -log10(0.05) * 2
+  yDiff <- (yMax - yMin) / (nLabel - 1)
+  xMin <- 500
+  
+  dfLbl <- df[rev(seq_len(nLabel)), ] %>%
+    mutate(yLbl = yDiff * (nLabel - x) + yMin,
+      xLbl = xMin)
+  
   g <- ggplot(df, aes(x, y)) + 
     geom_hline(yintercept = -log10(0.05), color = "#333333", linetype = "dotted") +
+    geom_segment(data = dfLbl, aes(y = y, yend = yLbl, x = x, xend = xLbl - 25), color = color, size = 0.5) +
     geom_point(size = 1, shape = 16, aes(color = color)) +
-    ggrepel::geom_text_repel(
-      data = df[rev(seq_len(nLabel)), ], aes(x = x, y = y, label = motif), 
-      size = 5 / ggplot2:::.pt,
-      max.overlaps = 30,
-      force = 9,
-      family = "Arial",
-      direction = "y",
-      nudge_x = 500,
-      hjust = 0,
-      ylim = c(-log10(0.05), max(df$y) * 1.02),
-      segment.color = color,
-      color = color,
-      min.segment.length = 0.1
-    ) +
+    geom_text(data = dfLbl, aes(label = motif, y = yLbl, x = xLbl), hjust = 0, color = color, size = 2) +
     scale_color_identity() +
     theme_classic() +
     theme(
@@ -591,7 +602,8 @@ plotVolcanoFromGetMarkerFeatures <- function(
           y = yLbl,
           color = "") +
         scale_y_continuous(expand = expansion(mult = c(0,0.05)), limits = c(0, NA)) +
-        scale_color_manual(values = c(HIVNEGCOLOR, "#dddddd", HIVPOSCOLOR))
+        scale_color_manual(values = c(HIVNEGCOLOR, "#dddddd", HIVPOSCOLOR)) +
+        geom_hline(yintercept = -log10(0.05), color = "#dddddd", linetype = "dashed")
     } +
     theme(legend.position = "bottom",
       axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
@@ -1096,43 +1108,31 @@ plotLogitRegressionVolcano <- function(
     mutate(sig = case_when(
       p < 0.05 & coeff > 0 ~ "Up in HIV+",
       p < 0.05 & coeff < 0 ~ "Up in HIV-",
-      TRUE ~ "ns"
-    ))
+      TRUE ~ "Not significant"
+    )) %>%
+    mutate(direction = coeff > 0)
+
   
-  sigPos <- df %>%
-    filter(sig != "ns" & coeff > 0)
+  yMin <- -log10(0.05) * 1.2
+  yMax <- -log10(min(df$p))
   
-  sigNeg <- df %>%
-    filter(sig != "ns" & coeff < 0)
-  
-  commonGeomTextRepelSettings <- list(
-    direction = "y",
-    force = 10,
-    size = 2, ylim = c(1.5, 8), segment.size = 0.25
-  )
-  
-  sigPosSettings <- list(
-    xlim = c(1.25, 2),
-    hjust = 0,
-    segment.colour = paste0(HIVPOSCOLOR, "50")
-  )
-  
-  sigNegSettings <- list(
-    xlim = c(-2, -1.25),
-    hjust = 1,
-    segment.colour = paste0(HIVNEGCOLOR, "50")
-  )
+  dfLbl <- df %>%
+    filter(p < 0.05) %>%
+    mutate(x = ifelse(coeff > 0, 1.25, -1.25)) %>%
+    group_by(direction) %>%
+    arrange(p, .by_group = TRUE) %>%
+    mutate(gid = seq_along(cleanName)) %>%
+    mutate(y = (yMax - yMin) / (max(gid) - 1) * (max(gid) - gid) + yMin)
   
   p <- ggplot(df, aes(x = coeff, y = -log10(p), color = sig)) +
     geom_point() +
     theme_classic() +
     scale_color_manual(values = c("#dddddd", HIVNEGCOLOR, HIVPOSCOLOR)) +
     geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "#cccccc") +
-    # scale_x_continuous(limits = c(-2, 2)) +
-    do.call(ggrepel::geom_text_repel,
-      c(list(data = sigPos, aes(label = cleanName)), sigPosSettings, commonGeomTextRepelSettings)) +
-    do.call(ggrepel::geom_text_repel,
-      c(list(data = sigNeg, aes(label = cleanName)), sigNegSettings, commonGeomTextRepelSettings)) +
+    geom_text(data = dfLbl, aes(x = x, y = y, label = cleanName, hjust = ifelse(coeff > 0, 0, 1)), size = 1.75) +
+    geom_segment(data = dfLbl, aes(x = x * 0.98, xend = coeff, y = y, yend = -log10(p)), size = 0.25, alpha = 0.5) +
+    xlim(-2, 2) +
+    coord_cartesian(clip = "off") +
     theme(
       legend.position = "none",
       axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000", family = "Arial"),

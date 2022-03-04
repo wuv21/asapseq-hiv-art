@@ -27,10 +27,12 @@ supplementalLollipopTheme <- theme(
   rect = element_rect(fill = "transparent", colour = NULL)
 )
 
-umapPlotThemeNoLeg <- theme(
-  legend.position = "none",
-  axis.ticks = element_blank(),
-  axis.text = element_blank()
+umapPlotThemeNoLeg <- list(
+  coord_fixed(),
+  theme(
+    legend.position = "none",
+    axis.ticks = element_blank(),
+    axis.text = element_blank())
 )
 
 umapPlotThemeLeg <- theme(
@@ -40,15 +42,6 @@ umapPlotThemeLeg <- theme(
   legend.margin = margin(0,0,0,0)
 )
 
-umapCleanPlotTheme <- list(
-  scale_x_continuous(expand = expansion(mult = c(0.04, 0.04))),
-  scale_y_continuous(expand = expansion(mult = c(0.04, 0.04))),
-  coord_fixed(),
-  theme(axis.title = element_text(hjust = 0.02),
-    axis.line = element_blank()))
-
-umapArrowSettings <- arrow(length = unit(0.2, "cm"))
-umapArrowSize <- 0.25
 
 wrapNewAnnotLevel <- function(p) {
   return(p + plot_layout(tag_level = "new"))
