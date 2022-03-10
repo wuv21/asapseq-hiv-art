@@ -1,7 +1,7 @@
 source("defaultFigureSettings.R")
 
 basePanelPlots <- c(
-  "../outs/rds/InVitro_basepanel.rds",
+  "../outs/rds/invitro_basepanel.rds",
   "../outs/rds/chronic_basepanel.rds", 
   "../outs/rds/art_basepanel.rds"
 )

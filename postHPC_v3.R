@@ -213,6 +213,13 @@ plotUmap(projInvitro_matched,
   fn = "InVitro_umap_labeledCluster",
   embedding = "UMAP2")
 plotUmap(projInvitro_matched,
+  colorBy = "Clusters2",
+  colorLabelBy = "Clusters2",
+  fn = "InVitro_umap_unannotCluster_withPlotLabels",
+  embedding = "UMAP2",
+  colorScheme = scale_color_manual(values = multiHueColorPalette),
+  propInLegend = TRUE)
+plotUmap(projInvitro_matched,
   colorBy = c("Clusters2", "manualClusterAnnot"),
   colorLabelBy = "Clusters2",
   fn = "InVitro_umap_labeledCluster_withPlotLabels",
@@ -243,6 +250,13 @@ plotUmap(projChronic_matched,
   fn = "chronic_umap_labeledCluster",
   embedding = "UMAP2")
 plotUmap(projChronic_matched,
+  colorBy = "Clusters2",
+  colorLabelBy = "Clusters2",
+  fn = "chronic_umap_unannotCluster_withPlotLabels",
+  embedding = "UMAP2",
+  colorScheme = scale_color_manual(values = multiHueColorPalette),
+  propInLegend = TRUE)
+plotUmap(projChronic_matched,
   fn = "chronic_umap_labeledCluster_withPlotLabels",
   colorBy = c("Clusters2", "manualClusterAnnot"),
   colorLabelBy = "Clusters2",
@@ -272,6 +286,13 @@ plotUmap(projART_matched,
   colorBy = "manualClusterAnnot",
   fn = "art_umap_labeledCluster",
   embedding = "UMAP2")
+plotUmap(projART_matched,
+  colorBy = "Clusters2",
+  colorLabelBy = "Clusters2",
+  fn = "art_umap_unannotCluster_withPlotLabels",
+  embedding = "UMAP2",
+  colorScheme = scale_color_manual(values = multiHueColorPalette),
+  propInLegend = TRUE)
 plotUmap(projART_matched,
   fn = "art_umap_labeledCluster_withPlotLabels",
   colorBy = c("Clusters2", "manualClusterAnnot"),
@@ -772,8 +793,9 @@ if (!dir.exists(chronicGcPeakFn)) {
   
   projChronic_matched <- addPeakMatrix(projChronic_matched, force = TRUE)
   
-  if("Motif" %ni% names(projChronic_matched@peakAnnotation)){
-    projChronic_matched <- addMotifAnnotations(ArchRProj = projChronic_matched, motifSet = "cisbp", name = "Motif")
+  if("Motif" %ni% names(projChronic_matched@peakAnnotation)) {
+    projChronic_matched <- addMotifAnnotations(ArchRProj = projChronic_matched,
+      motifSet = "cisbp", name = "Motif", force = TRUE)
   }
   
   projChronic_matched <- addBgdPeaks(projChronic_matched, force = TRUE)
@@ -946,7 +968,7 @@ if (!dir.exists(artGcPeakFn)) {
   )
   
   if ("EncodeTFBS" %ni% names(projART_matched@peakAnnotation)) {
-    projART_matched <- addMotifAnnotations(ArchRProj = projART_matched, collection = "EncodeTFBS")
+    projART_matched <- addArchRAnnotations(ArchRProj = projART_matched, collection = "EncodeTFBS")
   }
   
   projART_matched <- addDeviationsMatrix(
@@ -972,7 +994,7 @@ art_markerTest <- getMarkerFeatures(
   verbose = FALSE
 )
 
-plotVolcanoFromGetMarkerFeatures(projART_matched_gcPeak, chromVARmode = FALSE, fn = "art_volcano")
+plotVolcanoFromGetMarkerFeatures(art_markerTest, chromVARmode = FALSE, fn = "art_volcano")
 
 art_markerTest_deviations <- getMarkerFeatures(
   ArchRProj = projART_matched_gcPeak, 
@@ -1007,3 +1029,131 @@ plotVolcanoFromGetMarkerFeatures(art_markerTest_encode_deviations, chromVARmode 
   fn = "art_volcano_motifs_chromVAR_encode")
 plotMotifDot(art_markerTest_encode_deviations, "art_chromVAR_encodeUp_HIVneg", direction = "negative")
 plotMotifDot(art_markerTest_encode_deviations, "art_chromVAR_encodeUp_HIVpos", direction = "positive")
+
+
+
+
+###############################################################################
+# qc and frags
+###############################################################################
+plotUpsetCBC(atacCBC = projInVitro$cellNames,
+  hivCBC = unique(haystackInVitro$allViralFrags$newCbc),
+  adtCBC = Cells(adtInVitro),
+  fn = "invitro_upset_cbc")
+
+plotUpsetCBC(atacCBC = projChronic$cellNames,
+  hivCBC = unique(haystackChronic$allViralFrags$newCbc),
+  adtCBC = Cells(adtChronic),
+  separateByIndividual = TRUE,
+  fn = "chronic_upset_cbc")
+
+plotUpsetCBC(atacCBC = projART$cellNames,
+  hivCBC = unique(haystackART$allViralFrags$newCbc),
+  adtCBC = Cells(adtART),
+  separateByIndividual = TRUE,
+  fn = "art_upset_cbc")
+
+calculateLTRVersusInternal <- function(frags, ltr5End, ltr3Start, ltr3End) {
+  df <- frags %>%
+    mutate(ltrOnly = (startBp <= ltr5End & endBp <= ltr5End) | (startBp >= ltr3Start & endBp <= ltr3End)) %>%
+    mutate(internalOnly = startBp > ltr5End & endBp < ltr3Start) %>%
+    mutate(both = !ltrOnly & !internalOnly) %>%
+    summarize(LTRonly = sum(ltrOnly),
+      internalOnly = sum(internalOnly),
+      both = sum(both)) %>%
+    pivot_longer(everything(), names_to = "metric", values_to = "n") %>%
+    mutate(prop = round(n / sum(n), digits = 2))
+  
+  return(df)
+}
+
+sumaGeneAnnots <- read.csv("viralGenomeAnnotations/suma.csv") %>%
+  mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
+  mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
+
+inVitroFrags_matched <- haystackInVitro$filteredviralFrags[haystackInVitro$filteredviralFrags$newCbc %in% projInvitro_matched$cellNames, ]
+
+plotFragMultiGraph(frags = inVitroFrags_matched, coverage = rep(0, 9726), geneAnnots = sumaGeneAnnots, fn = "invitro_frags")
+calculateLTRVersusInternal(inVitroFrags_matched, 632, 9093, 9725)
+
+hxb2GeneAnnots <- read.csv("viralGenomeAnnotations/hxb2.csv") %>%
+  mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
+  mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
+
+chronicFrags_matched <- haystackChronic$filteredviralFrags[haystackChronic$filteredviralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
+  mutate(individual = ifelse(grepl("C01", sample), "C01", "C02"))
+
+plotFragMultiGraph(frags = chronicFrags_matched, coverage = rep(0, 9719), geneAnnots = hxb2GeneAnnots, separateByIndividual = TRUE, fn = "chronic_frags", gheight = 6)
+calculateLTRVersusInternal(chronicFrags_matched, 633, 9085, 9718)
+
+artFrags_matched <- haystackART$filteredviralFrags[haystackART$filteredviralFrags$newCbc %in% projART_matched$cellNames, ]
+
+checkFragmentOverlap <- function(q1, q2, s1, s2) {
+  if (q1 <= s2 & q1 >= s1) {
+    return(TRUE)
+  } else if (q2 >= s1 & q2 <= s2) {
+    return(TRUE)
+  } else if (s2 >= q1 & s2 <= q2) {
+    return(TRUE)
+  } else if (s1 >= q1 & s1 <= q2) {
+    return(TRUE)
+  }
+  return(FALSE)
+}
+
+artConsensusAnnots <- read.csv("viralGenomeAnnotations/GeneCutterParser_A08_A01_BEAT045.tsv", sep = "\t") %>%
+  filter(annotation != "Genome") %>%
+  mutate(annotation = tolower(annotation)) %>%
+  mutate(annotation = ifelse(grepl("ltr", annotation), "LTR", annotation)) %>%
+  bind_rows(hxb2GeneAnnots %>% dplyr::select(-annotation2) %>% mutate(genome = "chrHXB2")) %>%
+  group_split(genome)
+
+names(artConsensusAnnots) <- sapply(artConsensusAnnots, function(x) {return(x[1, "genome"])})
+
+artFrags_matchedWithAnnot <- lapply(seq_along(artFrags_matched$sample), function(i) {
+  seqname <- artFrags_matched[i, "seqname"]
+  seqnameAnnots <- artConsensusAnnots[[seqname]]
+  
+  if (is.null(seqnameAnnots)) {
+    return(NULL)
+  }
+  
+  q1 <- artFrags_matched[i, "startBp"]
+  q2 <- artFrags_matched[i, "endBp"]
+  
+  id <- paste(artFrags_matched[i, "sample"],
+    artFrags_matched[i, "cbc"],
+    artFrags_matched[i, "seqname"],
+    artFrags_matched[i, "startBp"],
+    artFrags_matched[i, "endBp"],
+    artFrags_matched[i, "readname"], sep = "")
+  
+  matches <- lapply(seq_along(seqnameAnnots$annotation), function(i) {
+    s1 <- seqnameAnnots$startPos[i]
+    s2 <- seqnameAnnots$endPos[i]
+    
+    check <- checkFragmentOverlap(q1, q2, s1, s2)
+    
+    if (check) {
+      return(data.frame(id = id, annot = seqnameAnnots$annotation[i]))
+    } else {
+      return(NULL)
+    }
+  })
+  
+  return(bind_rows(matches))
+})
+
+artFrags_matchedWithAnnot <- bind_rows(artFrags_matchedWithAnnot)
+plogFragMultiAnnotGraph(artFrags_matched, artFrags_matchedWithAnnot, unique(hxb2GeneAnnots$annotation), fn = "art_frags2")
+
+makeFancyUpsetPlotHIV(
+  seu = adtInvitro_matched,
+  cellsOfInterest = names(invitro_activeLaterCells),
+  featuresOfInterest = c("A0141", "A0870", "A0367", "A0147", "A0390"),
+  featuresOfInterestNames = c("CCR5", "SLAM", "CD2", "CD62L", "CD127"),
+  metadata = ifelse(invitro_activeLaterCells, "HIV+", "HIV-"),
+  thresholds = c(1.25, 1.25, 1.25, 2.75, 1.5),
+  fn = "invitro_fancyUpset_activatedLaterCells"
+)
+

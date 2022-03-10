@@ -90,14 +90,14 @@ prepareDEMarkerTableCompiled <- function(fns, descriptors, idCol = "Subset") {
 
 \pagebreak
 
-**Supplemental Table 2:** Significant surface markers enriched in each cluster (over all other cells) for *in vitro* model (Level 1).
+**Supplemental Table 2:** Significant surface markers enriched in each cluster (over all other cells) for *in vitro* model.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/inVitro_initClusterMarkers.tsv")
 ```
 
 \pagebreak
 
-**Supplemental Table 3:** Significant surface markers enriched in HIV+ versus HIV- cells for *in vitro* model (Level 1).
+**Supplemental Table 3:** Significant surface markers enriched in HIV+ versus HIV- cells for *in vitro* model.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTableCompiled(
   fns = c(
@@ -114,7 +114,7 @@ prepareDEMarkerTableCompiled(
 
 \pagebreak
 \blandscape
-**Supplemental Table 4:** Differential peak list for activated CD4+ cells between HIV+ and HIV- for *in vitro* model (Level 1).
+**Supplemental Table 4:** Differential peak list for activated CD4+ cells between HIV+ and HIV- for *in vitro* model.
 ```{r, echo=FALSE, message=FALSE}
 ivPeakListActivated <- read.csv("../outs/tsv/invitro_markerTest_activatedPeaks_topPeaks.tsv", sep = "\t")
 
@@ -145,14 +145,14 @@ kbl(ivPeakListActivated, booktabs = T, align = "c", longtable = TRUE, linesep = 
 
 \pagebreak
 
-**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during chronic infection (Level 2).
+**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during chronic infection.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/chronic_initClusterMarkers.tsv")
 ```
 
 \pagebreak
 
-**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during chronic infection (Level 2).
+**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during chronic infection.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTableCompiled(
   fns = c(
@@ -167,13 +167,13 @@ prepareDEMarkerTableCompiled(
 
 \pagebreak
 
-**Supplemental Table 7:** Significant surface markers enriched in each cluster (over all other cells) during treated infection (Level 3).
+**Supplemental Table 7:** Significant surface markers enriched in each cluster (over all other cells) during treated infection.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/art_initClusterMarkers.tsv")
 ```
 \pagebreak
 
-**Supplemental Table 8:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection (Level 3).
+**Supplemental Table 8:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTableCompiled(
   fns = c(

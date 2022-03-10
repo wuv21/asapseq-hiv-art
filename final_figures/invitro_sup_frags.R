@@ -8,7 +8,7 @@ figC <- figC & subplotTheme
 figC[[2]] <- figC[[2]] + theme(plot.margin = margin(0, 0, 0.5, 0, unit = "lines"))
 
 
-figF <- readRDS("../outs/rds/InVitro_umap_unlabeledCluster.rds")
+figF <- readRDS("../outs/rds/InVitro_umap_unannotCluster_withPlotLabels.rds")
 figF <- figF + guides(color = guide_legend(ncol = 5, direction = "horizontal", override.aes = list(size = 3))) + umapPlotThemeLeg
 
 idxDir <- "../data/idxstats/"

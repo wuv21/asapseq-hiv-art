@@ -10,7 +10,7 @@ figB[[2]] <- figB[[2]] + theme(plot.margin = margin(0, 0, 0.5, 0, unit = "lines"
 # figC <- readRDS("../outs/rds/chronic_qc_haystack_frags.rds")
 # figD <- readRDS("../outs/rds/chronic_qc_haystack_TSS.rds")
 
-figE <- readRDS("../outs/rds/chronic_umap_unlabeledCluster.rds")
+figE <- readRDS("../outs/rds/chronic_umap_unannotCluster_withPlotLabels.rds")
 figE <- figE + guides(color = guide_legend(ncol = 5, direction = "horizontal", override.aes = list(size = 3))) + umapPlotThemeLeg
 
 layout <- c(

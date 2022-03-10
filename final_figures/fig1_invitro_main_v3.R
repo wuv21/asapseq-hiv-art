@@ -1,9 +1,9 @@
 source("defaultFigureSettings.R")
 
 figA <- readRDS("../outs/rds/InVitro_umap_labeledCluster_withPlotLabels.rds")
-figB <- readRDS("../outs/rds/InVitro_umap_haystackOut.rds")
-figC <- readRDS("../outs/rds/inVitro_discreteAbsolute_matched.rds")
-figD <- readRDS("../outs/rds/inVitro_discreteHivOnly_matched.rds")
+figB <- readRDS("../outs/rds/invitro_umap_haystackOut.rds")
+figC <- readRDS("../outs/rds/invitro_discreteAbsolute_matched.rds")
+figD <- readRDS("../outs/rds/invitro_discreteHivOnly_matched.rds")
 figE <- readRDS("../outs/rds/invitro_lollipop_activeLate.rds")
 
 a_legend <- as_ggplot(get_legend(figA + 

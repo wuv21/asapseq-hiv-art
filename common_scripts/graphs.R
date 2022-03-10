@@ -107,7 +107,7 @@ plotUmap <- function(
       arrange(cluster)
   }
   
-  if (length(colorBy) == 1 & colorBy == "haystackOut") {
+  if (length(colorBy) == 1 && colorBy == "haystackOut") {
     df <- df %>%
       mutate(cluster = ifelse(cluster, "HIV+", "HIV-"))
   }
@@ -134,7 +134,7 @@ plotUmap <- function(
     ggtheme +
     guides(colour = guide_legend(override.aes = list(size = 4), nrow = 5))
     
-  if (is.null(colorScheme) & length(colorBy) == 1 & colorBy == "haystackOut") {
+  if (is.null(colorScheme) && length(colorBy) == 1 & colorBy == "haystackOut") {
     p1 <- p1 + scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR))
   } else if (!is.null(colorScheme)) {
     p1 <- p1 + colorScheme
@@ -143,19 +143,28 @@ plotUmap <- function(
   if (!is.null(colorBy) & !is.null(colorLabelBy)) {
     clusterLabelUmapPos <- df %>% 
       group_by(colorLabelCluster) %>% 
-      summarize(medianX = median(x),
-        medianY = median(y),
-        iqrXFactor = IQR(x) * 0.4,
-        iqrYFactor = IQR(y) * 0.4,
-        x = mean(x[x > (medianX - iqrXFactor) & x < (iqrXFactor + medianX)]),
-        y = mean(y[y > (medianY - iqrYFactor) & y < (iqrYFactor + medianY)]))
+      summarize(
+        topX = quantile(x, c(.6)),
+        topY = quantile(y, c(.6)),
+        bottomX = quantile(x, c(.4)),
+        bottomY = quantile(y, c(.4)),
+        x = (topX + bottomX) / 2,
+        y = (topY + bottomY) / 2)
+        # medianX = median(x),
+        # medianY = median(y),
+        # iqrXFactor = IQR(x) * 0.4,
+        # iqrYFactor = IQR(y) * 0.4,
+        # x = mean(x[x > (medianX - iqrXFactor) & x < (iqrXFactor + medianX)]),
+        # y = mean(y[y > (medianY - iqrYFactor) & y < (iqrYFactor + medianY)]))
     
     p1 <- p1 + 
       ggrepel::geom_label_repel(data = clusterLabelUmapPos,
         aes(x = x, y = y, label = colorLabelCluster),
         label.size = 0.05,
+        force = 10,
         size = BASEFONTSIZE,
-        segment.color = NA)
+        min.segment.length = 0,
+        segment.color = "#BBBBBB")
   }
   
   savePlot(plot = p1, fn = fn, devices = devices, gheight = 4, gwidth = 3.5)
@@ -1141,4 +1150,115 @@ plotLogitRegressionVolcano <- function(
       y = "log(p)")
   
   savePlot(p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+}
+
+makeFancyUpsetPlotHIV <- function(
+  seu,
+  cellsOfInterest,
+  featuresOfInterest,
+  featuresOfInterestNames = featuresOfInterest,
+  metadata,
+  thresholds,
+  fn
+) {
+  df <- t(seu@assays$tsa@data[featuresOfInterest, ]) %>%
+    as.data.frame(.)
+  
+  colnames(df) <- featuresOfInterestNames
+  df$meta <- "All cells"
+  df[cellsOfInterest, "meta"] <- metadata
+  
+  dfInterest <- df[cellsOfInterest, ]
+  
+  for (i in seq(1:length(featuresOfInterest))) {
+    dfInterest[, i] <- dfInterest[, i] > thresholds[i]
+  }
+  dfInterest <- dfInterest %>%
+    unite(col = "celltype", all_of(featuresOfInterestNames), sep = "___") %>%
+    mutate(
+      celltype = factor(celltype),
+      meta = factor(meta)) %>%
+    group_by(meta) %>%
+    mutate(totalGroup = n()) %>%
+    group_by(meta, celltype, .drop = FALSE) %>%
+    summarize(totalN = n()) %>%
+    group_by(meta) %>%
+    mutate(totalMeta = sum(totalN)) %>%
+    mutate(prop = totalN / totalMeta) %>%
+    mutate(comboID = as.character(row_number()))
+  
+  lolliPlot <- dfInterest %>%
+    ggplot(., aes(x = comboID, color = meta, y = prop)) +
+    geom_linerange(aes(ymin = 0, ymax = prop),
+      linetype = "dashed", position = position_dodge(0.7)) +
+    geom_hline(yintercept = 0) +
+    geom_point(position = position_dodge(0.7), size = 1.25) +
+    scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+    coord_cartesian(clip = "off") +
+    theme_classic() +
+    scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
+    labs(y = "Proportion of\nHIV- or HIV+ cells") +
+    theme(
+      legend.position = "none",
+      axis.text = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      axis.title.y = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.line.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.title.x = element_blank())
+  
+  dotPlot <- dfInterest %>%
+    separate(celltype, into = featuresOfInterestNames, sep = "___") %>%
+    pivot_longer(cols = all_of(featuresOfInterestNames), names_to = "metric", values_to = "bin") %>%
+    mutate(metric = factor(metric, levels = featuresOfInterestNames)) %>%
+    ggplot(aes(x = comboID, y = metric)) +
+    geom_point(size = 1.5, aes(color = bin)) +
+    scale_color_manual(values = c("#EFEFEF", "#000000")) +
+    labs(y = "Marker") +
+    theme(
+      panel.background = element_rect(fill = "#FFFFFF"),
+      legend.position = "none",
+      axis.title.x = element_blank(),
+      axis.text = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      axis.title.y = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      panel.grid.major.y = element_blank(),
+      axis.text.x = element_blank(),
+      axis.line.y = element_line(),
+      axis.ticks.y = element_blank(),
+      axis.ticks.x = element_blank())
+  
+  ridgePlot <- df %>%
+    pivot_longer(cols = all_of(featuresOfInterestNames), names_to = "metric", values_to = "bin") %>%
+    mutate(metric = factor(metric, levels = featuresOfInterestNames)) %>%
+    mutate(meta = factor(meta, levels = c("All cells", "HIV-", "HIV+"))) %>% #need to refactor this...
+    ggplot(., aes(y = metric, x = bin, fill = meta)) +
+    ggridges::geom_density_ridges(alpha = 0.7)
+  
+  for (i in seq(1:length(thresholds))) {
+    ridgePlot <- ridgePlot +
+      annotate("segment", x = thresholds[i], xend = thresholds[i], y = i, yend = i + 1, linetype = "dotted")
+  }
+  
+  ridgePlot <- ridgePlot +
+    scale_fill_manual(values = c("#1111ff", HIVNEGCOLOR, HIVPOSCOLOR)) +
+    labs(x = "Expression") +
+    theme_classic() +
+    guides(fill = guide_legend(override.aes = list(size = 0.5))) +
+    theme(axis.title = element_blank(),
+      legend.title = element_blank(),
+      legend.key.size = unit(0.8, "line"),
+      axis.line.y = element_blank(),
+      axis.text = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      legend.text = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      axis.title.x = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      axis.text.x = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank())
+  
+  
+  finalPlot <- (((lolliPlot) / dotPlot + plot_layout(heights = c(5, 3))) |
+      (as_ggplot(get_legend(ridgePlot)) / (ridgePlot + theme(legend.position = "none")) + plot_layout(heights = c(5, 3)))) + plot_layout(widths = c(4, 1))
+  
+  savePlot(finalPlot, fn = fn, gheight = 3, gwidth = 6, devices = c("rds", "png"))
 }
