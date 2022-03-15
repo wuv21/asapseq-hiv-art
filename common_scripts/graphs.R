@@ -652,7 +652,7 @@ greaterThanZero <- function(d1, d2) {
   return(d1 + d2Check)
 }
 
-calculateCoverage <- function(frags, coverage, startCol = "startBp", endCol = "endBp") {
+calculateCoverage <- function(frags, coverage, totalUniqCells = NULL, startCol = "startBp", endCol = "endBp") {
   uniqCbc <- unique(frags$newCbc)
   cbcCoverage <- vector("list", length(uniqCbc))
   names(cbcCoverage) <- uniqCbc
@@ -669,9 +669,11 @@ calculateCoverage <- function(frags, coverage, startCol = "startBp", endCol = "e
     cbcCoverage[[cbc]][c(start:end)] <- cbcCoverage[[cbc]][c(start:end)] + 1
   }
   
+  denominator <- ifelse(is.null(totalUniqCells), length(uniqCbc), totalUniqCells)
+  
   condensedCoverage <- Reduce(greaterThanZero, cbcCoverage, init = coverage)
   df <- data.frame(
-    y = condensedCoverage / length(uniqCbc),
+    y = condensedCoverage / denominator,
     x = seq(0, length(coverage) - 1)
   )
   
@@ -680,7 +682,12 @@ calculateCoverage <- function(frags, coverage, startCol = "startBp", endCol = "e
 
 plotFragDistribution <- function(frags, coverage, inferredCoverage) {
   seqCoverage <- calculateCoverage(frags, coverage)
-  inferredCoverage <- calculateCoverage(as.data.frame(inferredCoverage), coverage, startCol = "inferredStart", endCol = "inferredEnd")
+  inferredCoverage <- calculateCoverage(
+    as.data.frame(inferredCoverage),
+    coverage,
+    totalUniqCells = length(unique(frags$newCbc)),
+    startCol = "inferredStart",
+    endCol = "inferredEnd")
   
   df <- bind_rows(list("sequenced" = seqCoverage, "inferred" = inferredCoverage), .id = "coverageType")
   
@@ -807,14 +814,17 @@ plogFragMultiAnnotGraph <- function(
   
   df <- frags %>%
     mutate(id = paste0(sample, cbc, seqname, startBp, endBp, readname, sep = "")) %>%
-    left_join(fragsAnnot, by = "id") %>%
-    mutate(annot = factor(annot, levels = allAnnotLevels)) %>%
     separate(sample, sep = "_", into = c("individual", "well"), remove = FALSE) %>%
     mutate(seqname = gsub("(chrA01|chrA08|chr|chrA01\\.)", "", seqname)) %>%
     group_by(readname) %>%
     mutate(readNum = seq_along(sample)) %>%
-    mutate(readNumIndividual = paste0(individual, " R#", readNum))
-  
+    mutate(readNumIndividual = paste0(individual, " R#", readNum)) %>%
+    ungroup()
+
+  dfForAnnot <- df %>%
+    left_join(fragsAnnot, by = "id") %>%
+    mutate(annot = factor(annot, levels = allAnnotLevels))
+
   gTheme <- theme(
     axis.text.y = element_blank(),
     strip.background = element_blank(),
@@ -830,7 +840,7 @@ plogFragMultiAnnotGraph <- function(
     panel.background = element_blank(),
     panel.grid.major.y = element_line(color = "#EFEFEF"))
   
-  annotG <- df %>%
+  annotG <- dfForAnnot %>%
     ggplot(aes(y = cbc, x = annot, color = "green")) +
     geom_point(size = 0.6) +
     scale_x_discrete(drop = FALSE) +

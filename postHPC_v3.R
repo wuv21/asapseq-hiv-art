@@ -1073,7 +1073,9 @@ sumaGeneAnnots <- read.csv("viralGenomeAnnotations/suma.csv") %>%
 
 inVitroFrags_matched <- haystackInVitro$filteredviralFrags[haystackInVitro$filteredviralFrags$newCbc %in% projInvitro_matched$cellNames, ]
 
-plotFragMultiGraph(frags = inVitroFrags_matched, coverage = rep(0, 9726), geneAnnots = sumaGeneAnnots, fn = "invitro_frags")
+plotFragMultiGraph(
+  frags = inVitroFrags_matched, coverage = rep(0, 9726),
+  geneAnnots = sumaGeneAnnots, fn = "invitro_frags")
 calculateLTRVersusInternal(inVitroFrags_matched, 632, 9093, 9725)
 
 hxb2GeneAnnots <- read.csv("viralGenomeAnnotations/hxb2.csv") %>%
@@ -1101,7 +1103,7 @@ checkFragmentOverlap <- function(q1, q2, s1, s2) {
   return(FALSE)
 }
 
-artConsensusAnnots <- read.csv("viralGenomeAnnotations/GeneCutterParser_A08_A01_BEAT045.tsv", sep = "\t") %>%
+artConsensusAnnots <- read.csv("viralGenomeAnnotations/GeneCutterParser_A08_A01_B45.tsv", sep = "\t") %>%
   filter(annotation != "Genome") %>%
   mutate(annotation = tolower(annotation)) %>%
   mutate(annotation = ifelse(grepl("ltr", annotation), "LTR", annotation)) %>%
@@ -1156,4 +1158,28 @@ makeFancyUpsetPlotHIV(
   thresholds = c(1.25, 1.25, 1.25, 2.75, 1.5),
   fn = "invitro_fancyUpset_activatedLaterCells"
 )
+
+# tmp <- calculateCoverage(inVitroFrags_matched, rep(0, 9726))
+# 
+# tmp2 <- calculateCoverage(inVitroFrags_matched %>%
+#     group_by(readname, newCbc) %>%
+#     filter(n() == 2) %>%
+#     arrange(min(startBp, endBp), .by_group = TRUE) %>%
+#     summarise(inferredStart = first(endBp) + 1, inferredEnd = last(startBp) -1) %>%
+#     as.data.frame(.),
+#   coverage = rep(0, 9726), startCol = "inferredStart", endCol = "inferredEnd")
+# 
+# tmp %>% 
+#   mutate(y = y + tmp2$y) %>%
+#   filter(x < 800) %>% 
+#   ggplot(aes(x = x, y=y)) +
+#   annotate("rect", 
+#     xmin = c(40, 456-2), xmax = c(200, 456+140), ymin = 0, ymax = 0.3,
+#     alpha = .1, fill = "blue") +
+#   annotate("rect", 
+#     xmin = c(315), xmax = c(408), ymin = 0, ymax = 0.3,
+#     alpha = .1, fill = "red") +
+#   geom_vline(xintercept = 456, color = "red") +
+#   geom_line() + 
+#   theme_classic()
 
