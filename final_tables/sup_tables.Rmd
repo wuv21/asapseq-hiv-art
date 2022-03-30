@@ -171,6 +171,7 @@ prepareDEMarkerTableCompiled(
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/art_initClusterMarkers.tsv")
 ```
+
 \pagebreak
 
 **Supplemental Table 8:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection.
@@ -184,6 +185,14 @@ prepareDEMarkerTableCompiled(
 )
 ```
 
+\pagebreak
+**Supplemental Table 9:** Autologous virus sequences used in study.
+```{r, echo=FALSE, message=FALSE}
+viralSeqs <- read.csv("../viralFastas/infoForSupplemental.csv", sep = ",", check.names = FALSE)
+
+kbl(viralSeqs, booktabs = T, align = "c", longtable = TRUE) %>%
+  kable_styling(latex_options = c("repeat_header"))
+```
 
 
 
