@@ -11,6 +11,7 @@ library(glue)
 library(RColorBrewer)
 library(ggrastr)
 library(ggpubr)
+library(biomaRt)
 
 source("common_scripts/graphs.R")
 source("common_scripts/archrCleaning.R")
@@ -544,6 +545,35 @@ iv_ccr5_track <- plotBrowserTrack2(projInvitro_matched_gcPeak,
 
 cleanUpTrackAndSave(iv_ccr5_track, fn = "invitro_activated_ccr5")
 
+iv_genesOfInterest <- c("SELL", "IL7R", "PDCD1", "CD2", "ADGRG1")
+for (tmp in iv_genesOfInterest) {
+  cleanUpTrackAndSave(
+    archrTrack = plotBrowserTrack2(projInvitro_matched_gcPeak,
+      geneSymbol = tmp,
+      useGroups = c("Activated_FALSE", "Activated_TRUE"),
+      groupBy = "condensedHivCluster",
+      upstream = 10000, downstream = 10000,
+      scCellsMax = 750,
+      plotSummary = c("bulkTrack", "scTracK", "geneTrack"),
+      pal = c(HIVNEGCOLOR, HIVPOSCOLOR), borderWidth = 0, sizes = c(3,2,1))[[tmp]],
+    fn = paste0("invitro_activated_", tmp))
+} 
+
+invitro_markerTest_early <- getMarkerFeatures(
+  ArchRProj = projInvitro_matched_gcPeak, 
+  useMatrix = "PeakMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = c("Naive_earlyMemory_TRUE", "Tcm_TRUE"),
+  bgdGroups = c("Naive_earlyMemory_FALSE", "Tcm_FALSE"),
+  maxCells = 1000,
+  verbose = FALSE
+)
+
+plotVolcanoFromGetMarkerFeatures(invitro_markerTest_early,
+  fn = "invitro_peaks_volcano_earlyHIV")
+
 # chromVAR analysis
 invitro_chromvar_markerTest <- getMarkerFeatures(
   ArchRProj = projInvitro_matched_gcPeak,
@@ -555,7 +585,7 @@ invitro_chromvar_markerTest <- getMarkerFeatures(
   bgdGroups = "Activated_FALSE",
   maxCells = 1000,
   verbose = FALSE,
-  useSeqnames = "deviations"
+  useSeqnames = "z"
 )
 
 plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest, chromVARmode = TRUE,
@@ -563,6 +593,22 @@ plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest, chromVARmode = TRU
 
 plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHIVneg", direction = "negative")
 plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHIVpos", direction = "positive")
+
+invitro_chromvar_markerTest_early <- getMarkerFeatures(
+  ArchRProj = projInvitro_matched_gcPeak,
+  useMatrix = "MotifMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "Tcm_TRUE",
+  bgdGroups = "Tcm_FALSE",
+  verbose = FALSE,
+  useSeqnames = "z"
+)
+
+plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest_early, chromVARmode = TRUE,
+  fn = "invitro_volcano_motifs_early_chromVAR")
+
 ###############################################################################
 # iv model analysis
 ###############################################################################
@@ -1159,27 +1205,77 @@ makeFancyUpsetPlotHIV(
   fn = "invitro_fancyUpset_activatedLaterCells"
 )
 
-# tmp <- calculateCoverage(inVitroFrags_matched, rep(0, 9726))
+tmp <- calculateCoverage(inVitroFrags_matched, rep(0, 9726))
+
+tmp2 <- calculateCoverage(inVitroFrags_matched %>%
+    group_by(readname, newCbc) %>%
+    filter(n() == 2) %>%
+    arrange(min(startBp, endBp), .by_group = TRUE) %>%
+    summarise(inferredStart = first(endBp) + 1, inferredEnd = last(startBp) -1) %>%
+    as.data.frame(.),
+  coverage = rep(0, 9726), startCol = "inferredStart", endCol = "inferredEnd")
+
+tmp %>%
+  mutate(y = y + tmp2$y) %>%
+  filter(x < 800) %>%
+  ggplot(aes(x = x, y=y)) +
+  annotate("rect",
+    xmin = c(40, 456-2), xmax = c(200, 456+140), ymin = 0, ymax = 0.3,
+    alpha = .1, fill = "blue") +
+  annotate("rect",
+    xmin = c(315), xmax = c(408), ymin = 0, ymax = 0.3,
+    alpha = .1, fill = "red") +
+  geom_vline(xintercept = 456, color = "red") +
+  geom_line() +
+  theme_classic()
+
+
+# mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
+# tmpSapEnsembl <- tsa_catalog$Ensembl.ID[tsa_catalog$Ensembl.ID != ""]
+# names(tmpSapEnsembl) <- tsa_catalog[tsa_catalog$Ensembl.ID != "", "DNA_ID"]
 # 
-# tmp2 <- calculateCoverage(inVitroFrags_matched %>%
-#     group_by(readname, newCbc) %>%
-#     filter(n() == 2) %>%
-#     arrange(min(startBp, endBp), .by_group = TRUE) %>%
-#     summarise(inferredStart = first(endBp) + 1, inferredEnd = last(startBp) -1) %>%
-#     as.data.frame(.),
-#   coverage = rep(0, 9726), startCol = "inferredStart", endCol = "inferredEnd")
+# results <- getBM(
+#   attributes = c("ensembl_gene_id", "go_id","name_1006"),
+#   filters = "ensembl_gene_id",
+#   values = tmpSapEnsembl,
+#   mart = mart)
 # 
-# tmp %>% 
-#   mutate(y = y + tmp2$y) %>%
-#   filter(x < 800) %>% 
-#   ggplot(aes(x = x, y=y)) +
-#   annotate("rect", 
-#     xmin = c(40, 456-2), xmax = c(200, 456+140), ymin = 0, ymax = 0.3,
-#     alpha = .1, fill = "blue") +
-#   annotate("rect", 
-#     xmin = c(315), xmax = c(408), ymin = 0, ymax = 0.3,
-#     alpha = .1, fill = "red") +
-#   geom_vline(xintercept = 456, color = "red") +
-#   geom_line() + 
-#   theme_classic()
+# ignoredGoTerms <- c(
+#   "integral component of plasma membrane",
+#   "membrane",
+#   "plasma membrane",
+#   "integral component of membrane",
+#   "external side of plasma membrane",
+#   ""
+# )
+# 
+# tmpCleanPrefix <- function(x) {
+#   return(gsub("(.+___)","",x))
+# }
+# 
+# art_markers %>%
+#   select(gene, cleanName, piScore, Status) %>%
+#   mutate(geneID = tmpSapEnsembl[gene]) %>%
+#   left_join(results, by = c("geneID" = "ensembl_gene_id")) %>%
+#   group_by(Status, name_1006) %>%
+#   tally() %>%
+#   filter(!name_1006 %in% ignoredGoTerms) %>%
+#   filter(n >= 2) %>%
+#   arrange(n, .by_group = TRUE) %>%
+#   mutate(xvar = paste0(Status, "___", name_1006)) %>%
+#   mutate(xvar = factor(xvar, levels = unique(xvar))) %>%
+#   slice_max(n, n = 20) %>%
+#   ggplot(aes(x = n, y = xvar, fill = Status)) +
+#   geom_col(color = "#000000") +
+#   theme(
+#     legend.position = "none",
+#     panel.background = element_blank(), 
+#     panel.grid.major.x = element_line(color = "#cccccc", linetype = "dotted"),
+#     axis.text.y = element_text(size = 8),
+#     axis.title = element_blank()) +
+#   scale_y_discrete(labels = tmpCleanPrefix) +
+#   scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+#   scale_fill_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
+#   facet_grid(Status ~ ., scales = "free", space='free')
+  
 

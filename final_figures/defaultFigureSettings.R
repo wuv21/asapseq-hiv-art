@@ -65,7 +65,7 @@ saveFinalFigure <- function(
     if (d == "rds") {
       saveRDS(plot, gfn)
     } else if (d == "pdf") {
-      ggsave(gfn, plot = plot, dpi = "retina", device = cairo_pdf, width = gwidth, height = gheight, units = "in")  
+      ggsave(gfn, plot = plot, dpi = "retina", device = cairo_pdf, width = gwidth, height = gheight, units = "in")
     } else {
       ggsave(gfn, plot = plot, dpi = "retina", device = d, width = gwidth, height = gheight, units = "in")  
     }
