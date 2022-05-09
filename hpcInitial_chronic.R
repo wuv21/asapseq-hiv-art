@@ -39,18 +39,23 @@ arrowfile_c02 <- createArrowFiles(inputFiles = fragmentsFN_c02,
 
 combinedArrowFiles <- c(arrowfile_c01, arrowfile_c02)
 initProjDir <- "C01C02_init"
-qcFiltProjDir <- "C01C02_qcfiltTSS4"
+qcFiltProjDir <- "C01C02_qcfiltTSS6"
 if (!dir.exists(qcFiltProjDir)) {
   proj <- ArchRProject(
     ArrowFiles = combinedArrowFiles,
     outputDirectory = initProjDir,
     copyArrows = TRUE,
     showLogo = FALSE)
+  
 
-  #idxPass <- BiocGenerics::which(proj$TSSEnrichment >= 9)
-  #cellsPass <- proj$cellNames[idxPass]
-  #projQcFilter <- proj[cellsPass, ]
-  projQcFilter <- proj
+  proj$individual <- ifelse(grepl("C01", proj$cellNames), "C01", "C02")
+  
+  #c01IdxPass <- BiocGenerics::which(proj$individual == "C01" & proj$TSSEnrichment >= 4)
+  #c02IdxPass <- BiocGenerics::which(proj$individual == "C02" & proj$TSSEnrichment >= 8)
+
+  idxPass <- BiocGenerics::which(proj$TSSEnrichment >= 6)
+  cellsPass <- proj$cellNames[idxPass]
+  projQcFilter <- proj[cellsPass, ]
 
   # filter using AMULET
   multCells <- lapply(c(samples_c01, samples_c02), function(x) {
@@ -80,7 +85,6 @@ if (!dir.exists(qcFiltProjDir)) {
     dimsToUse = 1:30
   )
 
-  projQcFilter$individual <- ifelse(grepl("C01", projQcFilter$cellNames), "C01", "C02")
   projQcFilter <- addHarmony(
     ArchRProj = projQcFilter,
     reducedDims = "IterativeLSI",

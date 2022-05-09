@@ -1,7 +1,7 @@
 suppressMessages(library(ArchR))
 suppressMessages(library(GenomicFeatures))
 suppressMessages(library(rtracklayer))
-
+suppressMessages(library(stringr))
 
 addArchRThreads(threads = 4)
 addArchRGenome("hg38")
@@ -10,7 +10,7 @@ addArchRGenome("hg38")
 chrNames <- read.table("chrnames/all.chrnames.txt", header = FALSE)
 chrNamesDiscard <- chrNames[grepl("(random|EBV|chrUn|chrM|chrHXB2)", chrNames[, 1]), 1]
 chrNamesDiscard <- c(chrNamesDiscard, chrNames[grepl("^(KI|GL)", chrNames[, 1]), 1])
-chrNamesDiscard <- c(chrNamesDiscard, chrNames[grepl("^(chrA08|chrA01)", chrNames[, 1]), 1])
+chrNamesDiscard <- c(chrNamesDiscard, chrNames[grepl("^(chrA08|chrA01|chrBEAT2045)", chrNames[, 1]), 1])
 
 
 # 10x file locations
@@ -28,7 +28,7 @@ arrowfile_a08 <- createArrowFiles(inputFiles = fragmentsFN_a08,
   addGeneScoreMat = TRUE)
 
 samples_a01 <- c("A01_1", "A01_2", "A01_3", "A01_4")
-fragmentsFN_a01 <- paste0("../20210831_asapseq_a01/count_out_v2/", samples_a01, "/outs/fragments.tsv.gz")
+fragmentsFN_a01 <- paste0("../20210831_asapseq_a01/count_out_v3WithEnv_filtered/", samples_a01, "/outs/fragments.tsv.gz")
 arrowfile_a01 <- createArrowFiles(inputFiles = fragmentsFN_a01,
   sampleNames = samples_a01,
   minTSS = 4,
@@ -40,9 +40,22 @@ arrowfile_a01 <- createArrowFiles(inputFiles = fragmentsFN_a01,
   addGeneScoreMat = TRUE)
 
 
-combinedArrowFiles <- c(arrowfile_a08, arrowfile_a01)
-initProjDir <- "A08A01_init"
-qcFiltProjDir <- "A08A01_qcfiltTSS8"
+samples_b45 <- c("BEAT045_A2", "BEAT045_A3", "BEAT045_B1", "BEAT045_B2")
+sampleNames_b45 <- gsub("BEAT045", "B45", samples_b45)
+fragmentsFN_b45 <- paste0("../20220112_asapseq_jlmn_beat045/count_out_consensusHXB2/", samples_b45, "/outs/fragments.tsv.gz")
+arrowfile_b45 <- createArrowFiles(inputFiles = fragmentsFN_b45,
+  sampleNames = sampleNames_b45,
+  minTSS = 4,
+  minFrags = 1000,
+  addTileMat = TRUE,
+  excludeChr = chrNamesDiscard,
+  subThreading = TRUE, #some issue with hdf5
+  force = FALSE, # if don't want to rewrite
+  addGeneScoreMat = TRUE)
+
+combinedArrowFiles <- c(arrowfile_a08, arrowfile_a01, arrowfile_b45)
+initProjDir <- "A08A01B45_init"
+qcFiltProjDir <- "A08A01B45_qcfiltTSS8"
 if (!dir.exists(qcFiltProjDir)) {
   proj <- ArchRProject(
     ArrowFiles = combinedArrowFiles,
@@ -55,11 +68,13 @@ if (!dir.exists(qcFiltProjDir)) {
   projQcFilter <- proj[cellsPass, ]
 
   # filter using AMULET
-  multCells <- lapply(c(samples_a08, samples_a01), function(x) {
+  multCells <- lapply(c(samples_a08, samples_a01, samples_b45), function(x) {
     if (grepl("A08", x)) {
       amuletOutDir <- paste0("~/asapseq/20210620_asapseq_a08/amulet_out/", x)
+    } else if (grepl("A01", x)) {
+      amuletOutDir <- paste0("~/asapseq/20210831_asapseq_a01/amulet_out_filtered/", x)
     } else {
-      amuletOutDir <- paste0("~/asapseq/20210831_asapseq_a01/amulet_out/", x)
+      amuletOutDir <- paste0("~/asapseq/20220112_asapseq_jlmn_beat045/amulet_out/", x)
     }
 
     amuletOut <- unlist(read.table(paste0(amuletOutDir, "/MultipletBarcodes_01.txt"), header = FALSE))
@@ -82,7 +97,8 @@ if (!dir.exists(qcFiltProjDir)) {
     dimsToUse = 1:30
   )
 
-  projQcFilter$individual <- ifelse(grepl("A01", projQcFilter$cellNames), "A01", "A08")
+  projQcFilter$individual <- stringr::str_match(projQcFilter$cellNames, "\\w\\d{2}")[, 1]
+
   projQcFilter <- addHarmony(
     ArchRProj = projQcFilter,
     reducedDims = "IterativeLSI",
