@@ -4,6 +4,8 @@ suppressMessages(library(tidyverse))
 suppressMessages(library(glue))
 source("adt_preprocessing_general.R")
 
+set.seed(21)
+
 samples <- c("C01_1", "C01_2", "C01_3", "C02_1", "C02_2", "C02_3")
 
 tsa_catalog <- readRDS("../rds/tsa_catalog.rds")

@@ -2,6 +2,7 @@ suppressMessages(library(ArchR))
 suppressMessages(library(GenomicFeatures))
 suppressMessages(library(rtracklayer))
 
+set.seed(21)
 
 addArchRThreads(threads = 4)
 addArchRGenome("hg38")
@@ -13,7 +14,7 @@ chrNamesDiscard <- c(chrNamesDiscard, chrNames[grepl("^(KI|GL)", chrNames[, 1]),
 
 # 10x file locations
 samples_c01 <- c("C01_1", "C01_2", "C01_3")
-fragmentsFN_c01 <- paste0("../20211012_asapseq_c01/count_out_hxb2/", samples_c01, "/outs/fragments.tsv.gz")
+fragmentsFN_c01 <- paste0("../asapseq-hiv-art-atacData/", samples_c01, "/fragments.tsv.gz")
 arrowfile_c01 <- createArrowFiles(inputFiles = fragmentsFN_c01,
   sampleNames = samples_c01,
   minTSS = 4,
@@ -25,7 +26,7 @@ arrowfile_c01 <- createArrowFiles(inputFiles = fragmentsFN_c01,
   addGeneScoreMat = TRUE)
 
 samples_c02 <- c("C02_1", "C02_2", "C02_3")
-fragmentsFN_c02 <- paste0("../20211101_asapseq_c02/count_out_hxb2/", samples_c02, "/outs/fragments.tsv.gz")
+fragmentsFN_c02 <- paste0("../asapseq-hiv-art-atacData/", samples_c02, "/fragments.tsv.gz")
 arrowfile_c02 <- createArrowFiles(inputFiles = fragmentsFN_c02,
   sampleNames = samples_c02,
   minTSS = 4,
@@ -47,7 +48,6 @@ if (!dir.exists(qcFiltProjDir)) {
     copyArrows = TRUE,
     showLogo = FALSE)
   
-
   proj$individual <- ifelse(grepl("C01", proj$cellNames), "C01", "C02")
   
   #c01IdxPass <- BiocGenerics::which(proj$individual == "C01" & proj$TSSEnrichment >= 4)
@@ -60,9 +60,9 @@ if (!dir.exists(qcFiltProjDir)) {
   # filter using AMULET
   multCells <- lapply(c(samples_c01, samples_c02), function(x) {
     if (grepl("C01", x)) {
-      amuletOutDir <- paste0("~/asapseq/20211012_asapseq_c01/amulet_out/", x)
+      amuletOutDir <- paste0("../asapseq-hiv-art-atacData/", x)
     } else {
-      amuletOutDir <- paste0("~/asapseq/20211101_asapseq_c02/amulet_out/", x)
+      amuletOutDir <- paste0("../asapseq-hiv-art-atacData/", x)
     }
 
     amuletOut <- unlist(read.table(paste0(amuletOutDir, "/MultipletBarcodes_01.txt"), header = FALSE))

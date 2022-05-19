@@ -2,6 +2,7 @@ suppressMessages(library(ArchR))
 suppressMessages(library(GenomicFeatures))
 suppressMessages(library(rtracklayer))
 
+set.seed(21)
 
 addArchRThreads(threads = 4)
 addArchRGenome("hg38")
@@ -10,12 +11,10 @@ addArchRGenome("hg38")
 chrNames <- read.table("chrnames/all.chrnames.txt", header = FALSE)
 chrNamesDiscard <- chrNames[grepl("(random|EBV|chrUn|chrM|chrHIV_suma)", chrNames[, 1]), 1]
 chrNamesDiscard <- c(chrNamesDiscard, chrNames[grepl("^(KI|GL)", chrNames[, 1]), 1])
-# chrNamesDiscard <- c(chrNamesDiscard, chrNames[grepl("^(chrA08|chrA01)", chrNames[, 1]), 1])
-
 
 # 10x file locations
 samples_nd497B <- c("ND497_B")
-fragmentsFN_nd497B <- "../20210418_asapseq_pilot/cr2_ND497_B/outs/fragments.tsv.gz"
+fragmentsFN_nd497B <- "../asapseq-hiv-art-atacData/ND497_B/fragments.tsv.gz"
 arrowfile_nd497B <- createArrowFiles(inputFiles = fragmentsFN_nd497B,
   sampleNames = samples_nd497B,
   minTSS = 4,
@@ -42,7 +41,7 @@ if (!dir.exists(qcFiltProjDir)) {
 
   # filter using AMULET
   multCells <- lapply(c(samples_nd497B), function(x) {
-    amuletOutDir <- paste0("~/asapseq/20210418_asapseq_pilot/amulet_out/", x)
+    amuletOutDir <- paste0("../asapseq-hiv-art-atacData/", x)
 
     amuletOut <- unlist(read.table(paste0(amuletOutDir, "/MultipletBarcodes_01.txt"), header = FALSE))
     amuletOut <- paste0(x, "#", amuletOut)

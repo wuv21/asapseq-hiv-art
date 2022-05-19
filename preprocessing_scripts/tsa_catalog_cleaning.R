@@ -1,4 +1,5 @@
 library(tidyverse)
+library(glue)
 
 tsa_catalog <- read.csv("tsa_catalog/tsa_catalog_raw.csv", header = TRUE)
 

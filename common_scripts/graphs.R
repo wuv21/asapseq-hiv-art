@@ -38,6 +38,7 @@ generateUmapDfFromArchR <- function(
   proj,
   secondGraphColumn = "haystackOut",
   cluster = "Clusters",
+  donorColumn = NULL,
   colorLabelCluster = NULL,
   embedding = "UMAP") {
   
@@ -60,6 +61,10 @@ generateUmapDfFromArchR <- function(
   
   if (!is.null(colorLabelCluster)) {
     df$colorLabelCluster <- getCellColData(proj, select = colorLabelCluster)[, 1]
+  }
+  
+  if (!is.null(donorColumn)) {
+    df$donor <- getCellColData(proj, select = donorColumn)[, 1]
   }
   
   return(df)
@@ -191,16 +196,35 @@ plotDiscreteLollipop <- function(proj,
   gheight = 3,
   gwidth = 3,
   secondGraphColumn = "haystackOut",
-  graphType = "proportion") {
-  df <- generateUmapDfFromArchR(proj, cluster = cluster, secondGraphColumn = secondGraphColumn)
+  donorColumn = NULL,
+  graphType = "proportion"){
+  
+  if (is.null(donorColumn)) {
+    df <- generateUmapDfFromArchR(proj,
+                                  cluster = cluster,
+                                  secondGraphColumn = secondGraphColumn)
+  } else {
+    df <- generateUmapDfFromArchR(proj,
+                                  cluster = cluster,
+                                  secondGraphColumn = secondGraphColumn,
+                                  donorColumn = donorColumn)
+  }
+
   
   stopifnot(graphType %in% c("absolute", "hivOnly"))
   
   if (graphType == "absolute") {
-    p <- df %>%
+    dfg <- df %>%
       mutate(cluster = factor(cluster),
-        hivPos = factor(ifelse(secondMetadata, "Pos", "Neg"))) %>%
-      dplyr::count(cluster, hivPos, .drop = FALSE) %>%
+        hivPos = factor(ifelse(secondMetadata, "Pos", "Neg")))
+    
+    if (is.null(donorColumn)) {
+      dfg <- dfg %>% dplyr::count(cluster, hivPos, .drop = FALSE)
+    } else {
+      dfg <- dfg %>% dplyr::count(donor, cluster, hivPos, .drop = FALSE)
+    }
+      
+    p <- dfg %>%
       {ggplot(., aes(y = cluster, fill = hivPos)) +
           geom_linerange(aes(xmin = 0, xmax = n, y = cluster, color = hivPos),
             linetype = "dotted", position = position_dodge(0.8)) +
@@ -218,13 +242,29 @@ plotDiscreteLollipop <- function(proj,
           scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
           ggDiscreteLollipopTheme}
     
+    if (!is.null(donorColumn)) {
+      p <- p + facet_wrap(~ donor, nrow = 1)
+    }
+    
+    
   } else {
-    p <- df %>%
+    dfg <- df %>%
       mutate(cluster = factor(cluster),
         hivPos = ifelse(secondMetadata, "Pos", "Neg")) %>%
-      dplyr::filter(hivPos != "Neg") %>%
-      dplyr::count(cluster) %>%
+      dplyr::filter(hivPos != "Neg")
+    
+    if (is.null(donorColumn)) {
+      dfg <- dfg %>% dplyr::count(cluster)
+    } else {
+      dfg <- dfg %>% group_by(donor) %>% dplyr::count(cluster)
+    }
+    
+    dfg <- dfg %>%
       mutate(proportion = n / sum(n)) %>%
+      arrange(proportion) %>%
+      mutate(cluster = factor(cluster, levels = cluster))
+      
+    p <- dfg %>%
       {ggplot(., aes(y = cluster)) +
           geom_segment(aes(x = 0, xend = proportion, y = cluster, yend = cluster),
             color = HIVPOSCOLOR, linetype = "dotted") +
@@ -239,6 +279,10 @@ plotDiscreteLollipop <- function(proj,
             size = BASEFONTSIZE) +
           scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
           ggDiscreteLollipopTheme}
+    
+    if (!is.null(donorColumn)) {
+      p <- p + facet_wrap(~ donor, nrow = 1)
+    }
   }
   
   savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)

@@ -1,13 +1,14 @@
-﻿cluster,annotation
-C9,APC
-C8,CD4 Tcm CD127+/-
-C7,CD4 Tcm/activated/resident
-C5,CD4 Trm
-C4,CD4 Treg
-C3,CD4 Tcm/Trm CD127+
+cluster,annotation
+C9,CD4 Tcm/activated/resident
+C8,CD4 Treg
+C7,APC
+C6,CD8
+C5,CD4 Trm/Trm #1
+C4,CD4 Tcm/Trm #2
+C3,CD4 Tcm CD127+
 C2,CD4 Tfh
 C13,B naive
 C12,B memory/GC
 C11,APC/fDC
-C10,CD8
+C10,CD4 Tcm CD127+/-
 C1,ILC/APC/Other

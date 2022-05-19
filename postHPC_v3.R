@@ -17,7 +17,6 @@ source("common_scripts/graphs.R")
 source("common_scripts/archrCleaning.R")
 source("common_scripts/clusterAnnotation.R")
 source("common_scripts/differentialExpression.R")
-source("common_scripts/ncbiSearcher.R")
 source("common_scripts/exportTsv.R")
 source("common_scripts/colorPalettes.R")
 
@@ -40,7 +39,7 @@ assignInNamespace(".testMarkerSC", .testMarkerSCCustom, ns = "ArchR")
 ###############################################################################
 # analysis settings
 ###############################################################################
-addArchRThreads(threads = 2) # can adjust if more RAM is available (higher threads require more)
+addArchRThreads(threads = 3) # can adjust if more RAM is available (higher threads require more)
 set.seed(21) # for reproducibility
 
 ###############################################################################
@@ -80,7 +79,7 @@ projChronic <- haystackChronic$newProj
 ###############################################################################
 # load in art project from preHPC 
 ###############################################################################
-projART <- loadArchRProject(path = "A08A01B45_qcfiltTSS8/", showLogo = FALSE)
+projART <- loadArchRProject(path = "A08A01B45A09_qcfiltTSS8/", showLogo = FALSE)
 
 # add haystack data
 uniqSamples <- unique(projART$Sample)
@@ -114,15 +113,16 @@ ivPreProcessed <- loadProcessedProj(
   generateNewUmapSettings = list(
     "reducedDims" = "IterativeLSI",
     "name" = "UMAP2",
-    "nNeighbors" = 80,
+    "nNeighbors" = 200,
     "force" = TRUE,
-    "minDist" = 0.4),
+    "minDist" = 0.3),
   generateNewClusterSettings = list(
     "method" = "Seurat",
     "name" = "Clusters2",
     "resolution" = 0.8
   ),
   runPreAnnot = TRUE,
+  force = TRUE,
   runPreAnnotIsoComps = isoComparisonsInvitro,
   prefixForGraphs = "invitro"
 )
@@ -239,6 +239,7 @@ plotDiscreteLollipop(projInvitro_matched, "inVitro_discreteHivOnly_matched",
 ###############################################################################
 # chronic manual annot
 ###############################################################################
+
 projChronic_matched <- assignManualAnnotation(archrProj = projChronic_matched,
   cluster = "Clusters2",
   annotFn = "manualClusterAnnotations/chronic.csv")
@@ -310,33 +311,50 @@ plotDiscreteLollipop(projART_matched, "art_discreteAbsolute_matched",
 plotDiscreteLollipop(projART_matched, "art_discreteHivOnly_matched",
   cluster = "manualClusterAnnot",
   gheight = 4,
+  donorColumn = "individual",
   graphType = "hivOnly")
 
-tmp <- data.frame(
-  CD4 = adtART_matched@assays$tsa@data["A0072", ],
-  CD3 = adtART_matched@assays$tsa@data["A0034", ], 
-  CD5 = adtART_matched@assays$tsa@data["A0138", ],
-  CD14 = adtART_matched@assays$tsa@data["A0081", ],
-  CCR2 = adtART_matched@assays$tsa@data["A0242", ],
-  CD16 = adtART_matched@assays$tsa@data["A0083", ],
-  OX40 = adtART_matched@assays$tsa@data["A0158", ],
-  CD137 = adtART_matched@assays$tsa@data["A0355", ],
-  `HLA-DR` = adtART_matched@assays$tsa@data["A0159", ],
-  CD38 = adtART_matched@assays$tsa@data["A0389", ],
-  CD71 = adtART_matched@assays$tsa@data["A0394", ],
-  CD69 = adtART_matched@assays$tsa@data["A0146", ],
-  manualClusterAnnot = adtART_matched$manualClusterAnnot,
-  haystackOut = adtART_matched$haystackOut) %>%
-  pivot_longer(cols = -all_of(c("manualClusterAnnot", "haystackOut")), names_to = "marker", values_to = "expression")
 
-ggplot(mapping = aes(x = manualClusterAnnot, y = expression)) +
-  geom_hline(yintercept = 2, color = "#cccccc", linetype = "dashed") +
-  geom_violin(data = tmp %>% filter(!haystackOut), fill = HIVNEGCOLOR, color = "#333333") +
-  geom_point(data = tmp %>% filter(haystackOut), shape = 21, fill = HIVPOSCOLOR, color = "#000000") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  facet_wrap(~ marker, ncol = 1, scales = "free_y", strip.position = "right") +
-  labs(x = "Cluster", y = "Expression")
+plotDiscreteLollipop(projART_matched, "art_discreteAbsolute_matched_byDonor",
+                     cluster = "manualClusterAnnot",
+                     donorColumn = "individual",
+                     gheight = 4,
+                     gwidth = 14,
+                     graphType = "absolute")
+
+plotDiscreteLollipop(projART_matched, "art_discreteHivOnly_matched_byDonor",
+                     cluster = "manualClusterAnnot",
+                     donorColumn = "individual",
+                     gheight = 4,
+                     gwidth = 14,
+                     graphType = "hivOnly")
+
+# looking at the HIV+ cells in non-CD4+ t-cells
+# tmp <- data.frame(
+#   CD4 = adtART_matched@assays$tsa@data["A0072", ],
+#   CD3 = adtART_matched@assays$tsa@data["A0034", ], 
+#   CD5 = adtART_matched@assays$tsa@data["A0138", ],
+#   CD14 = adtART_matched@assays$tsa@data["A0081", ],
+#   CCR2 = adtART_matched@assays$tsa@data["A0242", ],
+#   CD16 = adtART_matched@assays$tsa@data["A0083", ],
+#   OX40 = adtART_matched@assays$tsa@data["A0158", ],
+#   CD137 = adtART_matched@assays$tsa@data["A0355", ],
+#   `HLA-DR` = adtART_matched@assays$tsa@data["A0159", ],
+#   CD38 = adtART_matched@assays$tsa@data["A0389", ],
+#   CD71 = adtART_matched@assays$tsa@data["A0394", ],
+#   CD69 = adtART_matched@assays$tsa@data["A0146", ],
+#   manualClusterAnnot = adtART_matched$manualClusterAnnot,
+#   haystackOut = adtART_matched$haystackOut) %>%
+#   pivot_longer(cols = -all_of(c("manualClusterAnnot", "haystackOut")), names_to = "marker", values_to = "expression")
+# 
+# ggplot(mapping = aes(x = manualClusterAnnot, y = expression)) +
+#   geom_hline(yintercept = 2, color = "#cccccc", linetype = "dashed") +
+#   geom_violin(data = tmp %>% filter(!haystackOut), fill = HIVNEGCOLOR, color = "#333333") +
+#   geom_point(data = tmp %>% filter(haystackOut), shape = 21, fill = HIVPOSCOLOR, color = "#000000") +
+#   theme_classic() +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+#   facet_wrap(~ marker, ncol = 1, scales = "free_y", strip.position = "right") +
+#   labs(x = "Cluster", y = "Expression")
 
 
 ###############################################################################
@@ -410,12 +428,13 @@ if (!dir.exists(invitroGcPeakFn)) {
   projInvitro_matched <- addGroupCoverages(ArchRProj = projInvitro_matched,
     groupBy = "condensedHivCluster",
     minReplicates = 3,
+    minCells = 333,
     force = TRUE)
   
   projInvitro_matched <- addReproduciblePeakSet(
     ArchRProj = projInvitro_matched,
     groupBy = "condensedHivCluster", 
-    pathToMacs2 = "/Users/vince/anaconda3/envs/asapseq/bin/macs2",
+    pathToMacs2 = "/home/wuv/anaconda3/envs/asapseq/bin/macs2",
     force = TRUE
   )
   

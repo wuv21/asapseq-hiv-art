@@ -27,7 +27,7 @@ findHIVDifferentialMarkers <- function(
     markers <- FindMarkers(seuAssay,
       cells.1 = cellsPos,
       cells.2 = cellsNeg,
-      slot = "data",
+      slot = "counts",
       test.use = findMarkerMethod,
       features = featuresToUse)    
   }

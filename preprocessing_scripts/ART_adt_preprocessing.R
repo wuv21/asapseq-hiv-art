@@ -4,7 +4,12 @@ suppressMessages(library(tidyverse))
 suppressMessages(library(glue))
 source("adt_preprocessing_general.R")
 
-samples <- c("A01_1", "A01_2", "A01_3", "A01_4", "A08_1", "A08_2", "A08_4", "BEAT045_A2", "BEAT045_A3", "BEAT045_B1", "BEAT045_B2")
+set.seed(21)
+
+samples <- c("A01_1", "A01_2", "A01_3", "A01_4", "A08_1", "A08_2", "A08_4",
+             "BEAT045_A2", "BEAT045_A3", "BEAT045_B1", "BEAT045_B2",
+             "A09_pre_1", "A09_pre_2", "A09_pre_3", "A09_pre_4", "A09_pre_5", "A09_pre_6",
+             "A09_post_2", "A09_post_3", "A09_post_4", "A09_post_5", "A09_post_6")
 
 tsa_catalog <- readRDS("../rds/tsa_catalog.rds")
 
@@ -28,7 +33,7 @@ adtART <- NormalizeData(adtART, normalization.method = "CLR", scale.factor = 100
 adtART <- ScaleData(adtART) %>%
   RunPCA(features = rownames(adtART@assays$tsa))
 
-adtART$individual <- str_match(adtART$orig.ident, "\\w\\d{2}")[,1]
+adtART$individual <- stringr::str_match(adtART$orig.ident, "\\w\\d{2}(_pre|_post)*")[, 1]
 
 adtART <- adtART %>%
   harmony::RunHarmony(group.by.vars = "individual", plot_convergence = TRUE, assay.use = "tsa")
