@@ -9,7 +9,10 @@ findHIVDifferentialMarkers <- function(
   featuresToUse = tsa_catalog[!tsa_catalog$isCtrl, "DNA_ID"],
   ident = "haystackOut",
   assay = "tsa",
-  findMarkerMethod = "DESeq2"
+  findMarkerMethod = "DESeq2",
+  statusPos = "HIV+",
+  statusNeg = "HIV-",
+  ...
 ) {
   
   if (is.null(cellsPos)) {
@@ -20,16 +23,16 @@ findHIVDifferentialMarkers <- function(
       assay = "tsa",
       slot = "data",
       test.use = findMarkerMethod,
-      features = featuresToUse)
+      features = featuresToUse, ...)
   } else {
     seuAssay <- GetAssay(seu, assay)
     
     markers <- FindMarkers(seuAssay,
       cells.1 = cellsPos,
       cells.2 = cellsNeg,
-      slot = "counts",
+      # slot = "counts",
       test.use = findMarkerMethod,
-      features = featuresToUse)    
+      features = featuresToUse, ...)    
   }
 
   if (!"gene" %in% colnames(markers)) {
@@ -43,7 +46,7 @@ findHIVDifferentialMarkers <- function(
     # filter(avg_log2FC > 0) %>% 
     mutate(piScore = avg_log2FC * -log10(p_val_adj)) %>%
     arrange(desc(piScore), .by_group = TRUE) %>%
-    mutate(Status = ifelse(avg_log2FC > 0, "HIV+", "HIV-"))
+    mutate(Status = ifelse(avg_log2FC > 0, statusPos, statusNeg))
   
   # clean_VlnPlot(VlnPlot(seuMerge_matched, features = filteredHivPosMarkers$gene, combine = FALSE),
   #   newTitle = filteredHivPosMarkers$cleanName,

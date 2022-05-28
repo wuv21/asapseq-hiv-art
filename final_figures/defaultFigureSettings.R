@@ -28,8 +28,9 @@ supplementalLollipopTheme <- theme(
 )
 
 umapPlotThemeNoLeg <- list(
-  coord_fixed(),
+  # coord_fixed(),
   theme(
+    aspect.ratio = 1,
     legend.position = "none",
     axis.ticks = element_blank(),
     axis.text = element_blank())

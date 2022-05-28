@@ -150,6 +150,7 @@ projQcFilter <- addUMAP(
 
 projQcFilter <- saveArchRProject(
   ArchRProj = projQcFilter,
+  dropCells = TRUE,
   outputDirectory = qcFiltProjDir,
   load = TRUE
 )

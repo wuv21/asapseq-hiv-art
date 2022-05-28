@@ -31,6 +31,43 @@ savePlot <- function(plot, fn, devices, gheight, gwidth, rdsPlot = NULL, scale =
 }
 
 
+customSortAnnotation <- function(x, reverse = FALSE, ignoreClusterPrefix = TRUE) {
+  priority <- c("MAIT", "Tfh", "Naive", "Tcm", "Tem", "Activated", "Treg")
+  
+  origNames <- x
+  if (ignoreClusterPrefix) {
+    x <- gsub("C\\d+: ", "", x)
+    
+    mapNames <- origNames
+    names(mapNames) <- x
+  }
+  
+  x <- sort(unique(x))
+  
+  cd4Indices <- grepl("^CD4", x)
+  
+  oldCd4 <- x[cd4Indices]
+  newCd4 <- c()
+  
+  for (p in priority) {
+    pIndices <- grepl(p, oldCd4)
+    newCd4 <- append(newCd4, oldCd4[pIndices])
+    oldCd4 <- oldCd4[!pIndices]
+  }
+  
+  if (length(oldCd4) > 0) {
+    newCd4 <- append(newCd4, oldCd4)
+  }
+
+  finalSort <- c(newCd4, x[!cd4Indices])
+  
+  if (ignoreClusterPrefix) {
+    finalSort <- mapNames[finalSort]
+  }
+  
+  return(finalSort)
+}
+
 ######
 # Generate UMAP df from ArchRProject
 ######
@@ -38,6 +75,7 @@ generateUmapDfFromArchR <- function(
   proj,
   secondGraphColumn = "haystackOut",
   cluster = "Clusters",
+  customSort = FALSE,
   donorColumn = NULL,
   colorLabelCluster = NULL,
   embedding = "UMAP") {
@@ -50,13 +88,17 @@ generateUmapDfFromArchR <- function(
     sample = proj$Sample)
     
   
-  if (is.vector(cluster)) {
+  if (is.vector(cluster) && length(cluster) > 1) {
     tmp <- getCellColData(proj, select = cluster)
     tmp <- unite(as.data.frame(tmp), col = "tmp", sep = ": ")
     df$cluster <- tmp$tmp
     
   } else {
     df$cluster <- getCellColData(proj, select = cluster)[, 1]
+    
+    if (customSort) {
+      df$cluster <- factor(df$cluster, levels = customSortAnnotation(df$cluster))
+    }
   }
   
   if (!is.null(colorLabelCluster)) {
@@ -101,11 +143,16 @@ plotUmap <- function(
   colorScheme = NULL,
   rasterize = TRUE,
   bringToTop = FALSE,
+  customClusterSort = FALSE,
   propInLegend = FALSE,
   propDigits = 1,
   embedding = "UMAP") {
   
-  df <- generateUmapDfFromArchR(proj, cluster = colorBy, embedding = embedding, colorLabelCluster = colorLabelBy)
+  df <- generateUmapDfFromArchR(proj,
+    cluster = colorBy,
+    embedding = embedding,
+    colorLabelCluster = colorLabelBy,
+    customSort = customClusterSort)
   
   if (bringToTop) {
     df <- df %>%
@@ -121,6 +168,12 @@ plotUmap <- function(
     df <- df %>%
       group_by(cluster) %>%
       mutate(cluster = glue("{cluster} ({round(n() / nrow(.) * 100, digits = propDigits)}%)"))
+  }
+  
+  if (customClusterSort) {
+    # TODO fix because cluster has more info...
+    
+    df$cluster <- factor(df$cluster, levels = customSortAnnotation(df$cluster))
   }
   
   p1 <- ggplot(df, aes(x = x, y = y))
@@ -182,6 +235,8 @@ ggDiscreteLollipopTheme <- list(
   theme(legend.position = "none",
     axis.title = element_text(size = BASEPTFONTSIZE),
     axis.text = element_text(size = BASEPTAXISFONTSIZE, color = "#000000"),
+    strip.background = element_rect(fill = "transparent", colour = "#000000", size = 1),
+    panel.spacing = unit(1.5, "line"),
     # plot.background = element_rect(fill = "transparent", colour = NA),
     # panel.background = element_rect(fill = "transparent", colour = NA),
     plot.margin = unit(c(0.1, 0.3, 0.1, 0.1), "in")
@@ -197,60 +252,87 @@ plotDiscreteLollipop <- function(proj,
   gwidth = 3,
   secondGraphColumn = "haystackOut",
   donorColumn = NULL,
-  graphType = "proportion"){
+  donorColumnOrder = NULL,
+  showAggregate = FALSE,
+  graphType = "proportion") {
   
   if (is.null(donorColumn)) {
     df <- generateUmapDfFromArchR(proj,
                                   cluster = cluster,
-                                  secondGraphColumn = secondGraphColumn)
+                                  secondGraphColumn = secondGraphColumn,
+                                  customSort = TRUE)
   } else {
     df <- generateUmapDfFromArchR(proj,
                                   cluster = cluster,
                                   secondGraphColumn = secondGraphColumn,
-                                  donorColumn = donorColumn)
+                                  donorColumn = donorColumn,
+                                  customSort = TRUE)
   }
-
   
   stopifnot(graphType %in% c("absolute", "hivOnly"))
   
+  if (!is.null(donorColumn) & !is.null(donorColumnOrder)) {
+    df <- df %>%
+      mutate(donor = factor(donor, levels = donorColumnOrder))
+  }
+  
   if (graphType == "absolute") {
     dfg <- df %>%
-      mutate(cluster = factor(cluster),
-        hivPos = factor(ifelse(secondMetadata, "Pos", "Neg")))
+      mutate(hivPos = factor(ifelse(secondMetadata, "Pos", "Neg")))
+    
+    absGraphSettings <- list(
+      geom_linerange(aes(xmin = 0, xmax = n, y = cluster, color = hivPos),
+        linetype = "dotted", position = position_dodge(0.8)),
+      geom_point(aes(x = n, color = hivPos), size = 1, position = position_dodge(0.8)),
+      labs(y = "Cluster",
+        x = "Number of cells"),
+      geom_text(aes(x = n + max(n) * 0.05, label = n, color = hivPos),
+        position = position_dodge(0.8),
+        vjust = 0.5,
+        hjust = 0,
+        size = BASEFONTSIZE),
+      scale_x_continuous(expand = expansion(mult = c(0, 0.05)), limits = c(0, NA)),
+      scale_y_discrete(drop = FALSE, limits = rev),
+      scale_fill_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)),
+      scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)),
+      ggDiscreteLollipopTheme
+    )
     
     if (is.null(donorColumn)) {
       dfg <- dfg %>% dplyr::count(cluster, hivPos, .drop = FALSE)
+      p <- ggplot(dfg, aes(y = cluster, fill = hivPos)) +
+        absGraphSettings
+      
     } else {
       dfg <- dfg %>% dplyr::count(donor, cluster, hivPos, .drop = FALSE)
-    }
       
-    p <- dfg %>%
-      {ggplot(., aes(y = cluster, fill = hivPos)) +
-          geom_linerange(aes(xmin = 0, xmax = n, y = cluster, color = hivPos),
-            linetype = "dotted", position = position_dodge(0.8)) +
-          geom_point(aes(x = n, color = hivPos), size = 1, position = position_dodge(0.8)) + 
-          labs(y = "Cluster",
-            x = "Number of cells") +
-          geom_text(aes(x = n + max(n) * 0.05, label = n, color = hivPos),
-            position = position_dodge(0.8),
-            vjust = 0.5,
-            hjust = 0,
-            size = BASEFONTSIZE) +
-          scale_x_continuous(expand = c(0, 0), limits = c(0, max(.$n * 1.05))) +
-          scale_y_discrete(drop = FALSE) +
-          scale_fill_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
-          scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
-          ggDiscreteLollipopTheme}
-    
-    if (!is.null(donorColumn)) {
-      p <- p + facet_wrap(~ donor, nrow = 1)
+      pList <- lapply(seq_along(levels(dfg$donor)), function(i) {
+        d <- levels(dfg$donor)[i]
+        
+        dfgDonor <- dfg %>%
+          dplyr::filter(donor == d)
+        
+        g <- ggplot(dfgDonor, aes(y = cluster)) +
+          absGraphSettings +
+          labs(subtitle = d) +
+          theme(
+            plot.subtitle = element_text(size = BASEPTFONTSIZE, hjust = 0.5),
+            axis.title.x = element_blank())
+        
+        if (i != 1) {
+          g <- g +
+            theme(
+              axis.text.y = element_blank(),
+              axis.title.y = element_blank())
+        }
+        
+        return(g)
+      })
     }
-    
     
   } else {
     dfg <- df %>%
-      mutate(cluster = factor(cluster),
-        hivPos = ifelse(secondMetadata, "Pos", "Neg")) %>%
+      mutate(hivPos = ifelse(secondMetadata, "Pos", "Neg")) %>%
       dplyr::filter(hivPos != "Neg")
     
     if (is.null(donorColumn)) {
@@ -259,33 +341,82 @@ plotDiscreteLollipop <- function(proj,
       dfg <- dfg %>% group_by(donor) %>% dplyr::count(cluster)
     }
     
-    dfg <- dfg %>%
-      mutate(proportion = n / sum(n)) %>%
-      arrange(proportion) %>%
-      mutate(cluster = factor(cluster, levels = cluster))
+    if (showAggregate) {
+      dfAggr <- dfg %>%
+        ungroup() %>%
+        group_by(cluster) %>%
+        summarize(n = sum(n)) %>%
+        mutate(donor = "Aggregate")
       
-    p <- dfg %>%
-      {ggplot(., aes(y = cluster)) +
-          geom_segment(aes(x = 0, xend = proportion, y = cluster, yend = cluster),
-            color = HIVPOSCOLOR, linetype = "dotted") +
-          geom_point(aes(x = proportion), color = HIVPOSCOLOR, size = 1) + 
-          labs(y = "Cluster",
-            x = "Proportion of HIV+ cells") +
-          geom_text(aes(x = proportion + 0.05,
-              label = scales::label_percent(accuracy = 0.1)(proportion)),
-            hjust = 0,
-            vjust = 0.5,
-            color = HIVPOSCOLOR,
-            size = BASEFONTSIZE) +
-          scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
-          ggDiscreteLollipopTheme}
+      if (is.null(donorColumnOrder)) {
+        donorLvls <- c(sort(unique(dfg$donor)), "Aggregate")
+      } else {
+        donorLvls <- c(levels(dfg$donor), "Aggregate")
+      }
+      
+      dfg <- dfg %>% 
+        bind_rows(dfAggr) %>%
+        mutate(donor = factor(donor, levels = donorLvls))
+    }
+    
+    dfg <- dfg %>%
+      mutate(proportion = n / sum(n))
+    
+    propGraphSettings <- list(
+      geom_segment(aes(x = 0, xend = proportion, y = cluster, yend = cluster),
+        color = HIVPOSCOLOR, linetype = "dotted"),
+      geom_point(aes(x = proportion), color = HIVPOSCOLOR, size = 1),
+      labs(y = "Cluster",
+        x = "Proportion of HIV+ cells"),
+      geom_text(aes(x = proportion + 0.05,
+        label = scales::label_percent(accuracy = 0.1)(proportion)),
+        hjust = 0,
+        vjust = 0.5,
+        color = HIVPOSCOLOR,
+        size = BASEFONTSIZE),
+      ggDiscreteLollipopTheme
+    )
     
     if (!is.null(donorColumn)) {
-      p <- p + facet_wrap(~ donor, nrow = 1)
+      pList <- lapply(seq_along(levels(dfg$donor)), function(i) {
+        d <- levels(dfg$donor)[i]
+        
+        dfgDonor <- dfg %>%
+          dplyr::filter(donor == d)
+        
+        g <- ggplot(dfgDonor, aes(y = cluster)) +
+          propGraphSettings +
+          labs(subtitle = d) +
+          scale_y_discrete(limits = rev, drop = FALSE) +
+          scale_x_continuous(limits = c(0, 1.05), labels = scales::label_percent(suffix = "")) +
+          theme(
+            plot.subtitle = element_text(size = BASEPTFONTSIZE, hjust = 0.5),
+            axis.title.x = element_blank())
+        
+        if (i != 1) {
+          g <- g +
+            theme(
+              axis.text.y = element_blank(),
+              axis.title.y = element_blank())
+        }
+        
+        return(g)
+      })
+      
+    } else {
+      p <- ggplot(dfg, aes(y = cluster)) +
+        propGraphSettings +
+        scale_y_discrete(limits = rev)
     }
   }
   
-  savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+  if (!is.null(donorColumn)) {
+    savePlot(plot = wrap_plots(pList, nrow = 1),
+      rdsPlot = pList, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+  } else {
+    savePlot(plot = p, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+  }
+  
 }
 
 plotVlnEnhanced <- function(
@@ -574,7 +705,8 @@ plotMotifDot <- function(
   fn,
   direction = "positive",
   devices = c("png", "rds"),
-  pValMax = 0.05
+  pValMax = 0.05,
+  showTopNByPVal = NULL
 ) {
   df <- data.frame(
     y = log10(assays(markerFeatures)$FDR[, 1]) * -1,
@@ -590,11 +722,22 @@ plotMotifDot <- function(
     pointColor <- HIVPOSCOLOR
   }
   
-  df <- filter(df, y > -log10(pValMax))
-  df <- df[order(df$y, decreasing = TRUE), ]
+  if (!is.null(showTopNByPVal)) {
+    df <- df[order(df$y, decreasing = TRUE), ]
+    df <- df[c(1:showTopNByPVal), ]
+  } else {
+    df <- filter(df, y > -log10(pValMax))
+    df <- df[order(df$y, decreasing = TRUE), ]
+  }
   df$motif <- factor(df$motif, levels = df$motif)
   
-  g <- ggplot(df, aes(x = motif, y = y)) +
+  g <- ggplot(df, aes(x = motif, y = y))
+  
+  if (!is.null(showTopNByPVal)) {
+    g <- g + geom_hline(yintercept = -log10(pValMax), linetype = "dotted", color = "#00000075")
+  }
+  
+  g <- g +
     geom_point(color = pointColor) +
     theme_classic() +
     coord_cartesian(clip = "off") +
@@ -606,7 +749,8 @@ plotMotifDot <- function(
     labs(x = "Motif",
       y = "-log10(FDR)")
   
-  savePlot(plot = g, fn = fn, devices = devices, gheight = 2, gwidth = nrow(df) / 5)
+  gwidth <- ifelse(nrow(df) >= 5, nrow(df) / 5, 3)
+  savePlot(plot = g, fn = fn, devices = devices, gheight = 2, gwidth = gwidth)
 }
 
 
@@ -617,7 +761,10 @@ plotVolcanoFromGetMarkerFeatures <- function(
   negFoldChageName = "Downregulated in HIV+",
   devices = c("png", "rds"),
   chromVARmode = FALSE,
-  returnDf = FALSE
+  returnDf = FALSE,
+  labelTopN = NULL,
+  filterOutlier = FALSE,
+  isEncode = FALSE
 ) {
   if (chromVARmode) {
       df <- data.frame(
@@ -636,27 +783,46 @@ plotVolcanoFromGetMarkerFeatures <- function(
     yLbl <- "-log10(FDR)"
   }
   
+  if (isEncode) {
+    motifSep <- str_match(df$motif, "(\\d+).(.*)-(.*)...")
+    df$motif <- paste0(motifSep[, 3], " (", motifSep[, 4], ")")
+  }
+  
   df <- df %>%
     mutate(pointColor = case_when(
       y > -1 * log10(0.05) & x > 0 ~ posFoldChangeName,
       y > -1 * log10(0.05) & x < 0 ~ negFoldChageName,
       TRUE ~ "Not significant"
-    ))
+    )) %>%
+    mutate(pointColor = factor(pointColor, levels = c(negFoldChageName, "Not significant", posFoldChangeName))) %>%
+    filter(!is.na(y) & !is.na(x) & !is.nan(x))
   
   if (returnDf) {
     return(df)
   }
   
+  if (filterOutlier) {
+    origLength <- nrow(df)
+    df <- df %>%
+      dplyr::filter(y < 10)
+    
+    print(paste0("Note that ", origLength - nrow(df), " outliers were filtered out for graphical purposes."))
+  }
+  
+  hivColors <- c(HIVNEGCOLOR, "#dddddd", HIVPOSCOLOR)
+  names(hivColors) <- levels(df$pointColor)
+  hivColorScale <- scale_colour_manual(values = hivColors)
+  
   g <- df %>%  
-    {ggplot(data = ., aes(x = x, y = y, color = pointColor)) +
-        rasterize(geom_point(size = 0.3, alpha = 0.8), dpi = 300) +
+    {ggplot(data = ., aes(x = x, y = y)) +
+        geom_hline(yintercept = -log10(0.05), color = "#00000070", linetype = "dotted") +
+        rasterize(geom_point(aes(color = pointColor), size = 0.3, alpha = 0.8), dpi = 300) +
         theme_classic() +
         labs(x = xLbl,
           y = yLbl,
           color = "") +
         scale_y_continuous(expand = expansion(mult = c(0,0.05)), limits = c(0, NA)) +
-        scale_color_manual(values = c(HIVNEGCOLOR, "#dddddd", HIVPOSCOLOR)) +
-        geom_hline(yintercept = -log10(0.05), color = "#dddddd", linetype = "dashed")
+        hivColorScale
     } +
     theme(legend.position = "bottom",
       axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
@@ -664,6 +830,33 @@ plotVolcanoFromGetMarkerFeatures <- function(
       legend.key.size = unit(BASEPTFONTSIZE, 'points'),
       legend.text = element_text(size = BASEPTFONTSIZE)) +
     guides(colour = guide_legend(override.aes = list(size = 1), ncol = 1))
+  
+  if (!is.null(labelTopN)) {
+    dfTopN <- df %>%
+      mutate(direction = x > 0) %>%
+      group_by(direction) %>%
+      dplyr::top_n(labelTopN, wt = y)
+    
+    yMax <- max(df$y) * 1.05
+    yMin <- 0.1
+    
+    dfLbl <- dfTopN %>%
+      mutate(xLbl = ifelse(x > 0, max(df$x) + 0.1, min(df$x) - 0.1)) %>%
+      group_by(direction) %>%
+      arrange(desc(y)) %>%
+      mutate(gid = seq_along(motif)) %>%
+      mutate(yLbl = (yMax - yMin) / (max(gid) - 1) * (max(gid) - gid) + yMin)
+    
+    g <- g +
+      scale_x_continuous(expand = expansion(mult = c(0.4,0.4))) +
+      geom_text(data = dfLbl,
+        aes(x = xLbl, y = yLbl, label = motif, hjust = ifelse(x > 0, 0, 1)),
+        color = "#000000",
+        size = 1.75) +
+      geom_segment(data = dfLbl,
+        aes(x = xLbl * 0.98, xend = x, y = yLbl, yend = y),
+        color = "#00000030", size = 0.25)
+  }
   
   savePlot(plot = g, fn = fn, devices = devices, gheight = 3, gwidth = 3)
 }
@@ -805,7 +998,7 @@ plotFragMultiGraph <- function(
   coverage,
   geneAnnots,
   fn,
-  gwidth = 4,
+  gwidth = 3.5,
   gheight = 7.5,
   separateByIndividual = FALSE,
   devices = c("png", "rds")
@@ -854,12 +1047,10 @@ plogFragMultiAnnotGraph <- function(
   fn,
   devices = c("png", "rds"),
   gwidth = 6,
-  gheight = 7.5) {
+  gheight = NULL) {
   
   df <- frags %>%
-    mutate(id = paste0(sample, cbc, seqname, startBp, endBp, readname, sep = "")) %>%
-    separate(sample, sep = "_", into = c("individual", "well"), remove = FALSE) %>%
-    mutate(seqname = gsub("(chrA01|chrA08|chr|chrA01\\.)", "", seqname)) %>%
+    mutate(seqname = gsub("(chrA01_|chrA08|chrA09_|chr|chrA01\\.)", "", seqname)) %>%
     group_by(readname) %>%
     mutate(readNum = seq_along(sample)) %>%
     mutate(readNumIndividual = paste0(individual, " R#", readNum)) %>%
@@ -882,19 +1073,24 @@ plogFragMultiAnnotGraph <- function(
     axis.text = element_text(size = 5),
     axis.title = element_blank(),
     panel.background = element_blank(),
+    plot.margin = margin(0, -0.1, 0, -0.1, unit = "line"),
     panel.grid.major.y = element_line(color = "#EFEFEF"))
   
   annotG <- dfForAnnot %>%
     ggplot(aes(y = cbc, x = annot, color = "green")) +
     geom_point(size = 0.6) +
     scale_x_discrete(drop = FALSE) +
-    scale_color_discrete(guide = guide_legend(override.aes = list(alpha = 0), nrow = 2))+
+    scale_color_discrete(guide = guide_legend(override.aes = list(alpha = 0), nrow = 1))+
     theme_classic() +
     gTheme +
-    theme(legend.text = element_text(color = "transparent"),
+    theme(
+      panel.border = element_rect(fill = NA, colour = "black"),
+      legend.text = element_text(color = "transparent"),
       axis.ticks.x = element_line(color = "#FFFFFF00"),
+      legend.position = "bottom",
+      legend.direction = "horizontal",
       strip.text.y = element_blank()) +
-    lemon::facet_rep_wrap(seqname ~ ., scales = "free_y", ncol = 1, strip.position = "left")
+    lemon::facet_rep_wrap(~ seqname, scales = "free_y", ncol = 1, strip.position = "left")
   
   regionG <- df %>%
     ggplot(aes(y = cbc, yend = cbc, x = startBp, xend = endBp, color = readNumIndividual)) +
@@ -902,7 +1098,8 @@ plogFragMultiAnnotGraph <- function(
     theme_classic() +
     gTheme +
     theme(
-      strip.background = element_rect(fill = "#EFEFEF", colour = "#EFEFEF"),
+      panel.border = element_rect(fill = NA, colour = "black"),
+      strip.background = element_rect(fill = NA, colour = NA),
       strip.text.y.left = element_text(angle = 0),
       legend.position = "bottom",
       legend.direction = "horizontal") +
@@ -916,7 +1113,13 @@ plogFragMultiAnnotGraph <- function(
   regionG <- .spaceFacetRelative(regionG, tmpN$count)
   annotG <- .spaceFacetRelative(annotG, tmpN$count)
   
+  # TODO take legend and make it separate to add to the bottom spanning both columns...
+  
   combG <- wrap_elements(regionG) + wrap_elements(annotG) + plot_layout(widths = c(3.5,1.5))
+  
+  if (is.null(gheight)) {
+    gheight <- 2 + sum(tmpN$count) * 0.1
+  }
   
   savePlot(combG, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }
@@ -982,7 +1185,7 @@ plotUpsetCBC <- function(
   if (separateByIndividual) {
     df <- df %>%
       separate(cbc, sep = "#", remove = FALSE, into = c("sample", "oligoBC")) %>%
-      separate(sample, sep = "_", into = c("individual", "well"))
+      mutate(individual = str_match(sample, "(.*)(?=_.*$)")[, 1])
     
     df <- df %>%
       pivot_wider(id_cols = all_of(c("individual", "cbc")), names_from = modal, values_from = value) %>%

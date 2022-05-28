@@ -15,7 +15,7 @@ figActModel <- readRDS("../outs/rds/invitro_models_activated.rds")
 figModel <- figModel + guides(color = guide_legend(ncol = 2)) + labs(subtitle = "Total CD4+ T-cells")
 figActModel <- figActModel + guides(color = guide_legend(ncol = 2)) + labs(subtitle = "Activated CD4+ T-cells")
 
-figFancyUpset <- readRDS("../outs/rds/invitro_fancyUpset_activatedLatercells.rds")
+figFancyUpset <- readRDS("../outs/rds/invitro_fancyUpset_activatedLaterCells.rds")
 
 figROCVolcano <- figROCVolcano + 
   subplotTheme +
@@ -80,5 +80,5 @@ p <- wrap_elements(panel = figVolcano + subplotTheme +
   plot_annotation(tag_levels = c("a")) +
   plot_layout(design = layout)
 
-saveFinalFigure(plot = p, fn = "fig2", devices = c("png", "pdf"), gwidth = 8, gheight = 9)
+saveFinalFigure(plot = p, fn = "fig2", devices = c("png", "pdf"), gwidth = 8.1, gheight = 9)
 
