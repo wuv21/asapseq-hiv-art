@@ -191,8 +191,8 @@ plotUmap <- function(
     theme_classic() +
     ggtheme +
     guides(colour = guide_legend(override.aes = list(size = 4), nrow = 5))
-    
-  if (is.null(colorScheme) && length(colorBy) == 1 & colorBy == "haystackOut") {
+  
+  if (is.null(colorScheme) && colorBy == "haystackOut") {
     p1 <- p1 + scale_color_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR))
   } else if (!is.null(colorScheme)) {
     p1 <- p1 + colorScheme
@@ -471,7 +471,7 @@ plotVlnEnhanced <- function(
   gSkeleton <- function(d, title, titleColor) {
     g <- ggplot(d, aes(x = x, y = y)) +
       geom_half_violin(aes(fill = colorData), color = "#000000", side = "l", width = halfWidths, lwd = 0.3) +
-      geom_half_point(aes(fill = colorData, color = colorData), side = "r", width = halfWidths, size = 0.1, alpha = 0.3) +
+      rasterize(geom_half_point(aes(fill = colorData, color = colorData), side = "r", width = halfWidths, size = 0.1, alpha = 0.3), dpi = 300) +
       theme_classic() +
       theme(panel.grid = element_blank(),
         legend.position = "none",
@@ -1037,6 +1037,10 @@ plotFragMultiGraph <- function(
   ind <- tmpG$layout$t[grepl("panel", tmpG$layout$name)]
   tmpG$heights[ind] <- unit(relHeights, "null")
   
+  for(i in which(grepl("strip-l", tmpG$layout$name))){
+    tmpG$grobs[[i]]$layout$clip <- "off"
+  }
+  
   return(tmpG)
 }
 
@@ -1077,17 +1081,18 @@ plogFragMultiAnnotGraph <- function(
     panel.grid.major.y = element_line(color = "#EFEFEF"))
   
   annotG <- dfForAnnot %>%
-    ggplot(aes(y = cbc, x = annot, color = "green")) +
+    ggplot(aes(y = cbc, x = annot, color = 1)) +
     geom_point(size = 0.6) +
     scale_x_discrete(drop = FALSE) +
-    scale_color_discrete(guide = guide_legend(override.aes = list(alpha = 0), nrow = 1))+
+    # scale_color_discrete(guide = guide_legend(override.aes = list(alpha = 0), nrow = 2)) +
     theme_classic() +
     gTheme +
     theme(
       panel.border = element_rect(fill = NA, colour = "black"),
       legend.text = element_text(color = "transparent"),
       axis.ticks.x = element_line(color = "#FFFFFF00"),
-      legend.position = "bottom",
+      legend.position = "none",
+      legend.background = element_rect(fill = "transparent", colour = NA),
       legend.direction = "horizontal",
       strip.text.y = element_blank()) +
     lemon::facet_rep_wrap(~ seqname, scales = "free_y", ncol = 1, strip.position = "left")
@@ -1101,8 +1106,8 @@ plogFragMultiAnnotGraph <- function(
       panel.border = element_rect(fill = NA, colour = "black"),
       strip.background = element_rect(fill = NA, colour = NA),
       strip.text.y.left = element_text(angle = 0),
-      legend.position = "bottom",
-      legend.direction = "horizontal") +
+      legend.position = "left",
+      legend.direction = "vertical") +
     lemon::facet_rep_wrap(~ seqname, scales = "free", ncol = 1, strip.position = "left")
   
   tmpN <- df %>%
@@ -1115,7 +1120,7 @@ plogFragMultiAnnotGraph <- function(
   
   # TODO take legend and make it separate to add to the bottom spanning both columns...
   
-  combG <- wrap_elements(regionG) + wrap_elements(annotG) + plot_layout(widths = c(3.5,1.5))
+  combG <- wrap_elements(regionG) + wrap_elements(annotG) + plot_layout(widths = c(3.75,1.5))
   
   if (is.null(gheight)) {
     gheight <- 2 + sum(tmpN$count) * 0.1
