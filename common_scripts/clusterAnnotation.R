@@ -80,7 +80,7 @@ getBasePanelAndMarkers <- function(
     group_by(cluster) %>%
     filter(avg_log2FC > 0) %>%
     mutate(piScore = avg_log2FC * -log10(p_val_adj)) %>%
-    arrange(desc(piScore), .by_group = TRUE)
+    dplyr::arrange(desc(piScore), .by_group = TRUE)
   
   write.table(clusterMarkersFilt, file = tsvFn, row.names = FALSE, quote = FALSE, sep = "\t")
   

@@ -2,21 +2,35 @@ source("defaultFigureSettings.R")
 library(ComplexHeatmap)
 
 figA <- readRDS("../outs/rds/art_lollipop_deseq2.rds")
-figB <- readRDS("../outs/rds/art_lollipop_negbinom.rds")
+figB <- readRDS("../outs/rds/art_lollipop_wilcox.rds")
 figC <- readRDS("../outs/rds/art_tcmttm_markers.rds")
 figD <- readRDS("../outs/rds/art_tem_markers.rds")
 figERds <- readRDS("../outs/rds/artLess_markerTest_deviations_heatmap.rds")
 figETxtRds <- readRDS("../outs/rds/artLess_markerTest_deviations_heatmapTxt.rds")
+figF <- readRDS("../outs/rds/art_chromVAR_tcmttm_motifsUp_HIVpos_enhanced.rds")
 
 titleTheme <- subplotTheme + theme(
-  plot.title = element_text(size = 8, hjust = 0.5),
+  plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
   axis.text = element_text(size = 6),
   axis.title = element_blank())
 
-figA <- figA + labs(title = "DESeq2") + titleTheme
-figB <- figB + labs(title = "Neg. binomial") + titleTheme
+figA <- figA + labs(title = "All T cells (DESeq2)") + titleTheme
+figB <- figB + labs(title = "All T cells (Wilcoxon)") + titleTheme
 figC <- figC + labs(title = "Tcm/Ttm (DESeq2)") + titleTheme
 figD <- figD + labs(title = "Tem (DESeq2)") + titleTheme
+
+figF <- figF + subplotTheme +
+  labs(
+    title = "Tcm/Ttm HIV+ Enriched Motifs",
+    color = "Mean\ndifference",
+    y = "FDR") +
+  titleTheme +
+  theme(plot.subtitle = element_blank(),
+    axis.title.y = element_text(size = 6),
+    legend.title = element_text(size = 6),
+    legend.text = element_text(size = 6),
+    legend.key.size = unit(0.5, 'line'),
+    plot.margin = margin(r = 5, unit = "line"))
 
 # figD <- ggplotGrob(figD)
 # for(i in which(grepl("strip-r", figD$layout$name))){
@@ -33,7 +47,8 @@ figE <- ComplexHeatmap::Heatmap(
   row_title_gp = gpar(fontsize = 6),
   row_dend_side = "left",
   show_row_dend = TRUE,
-  cluster_columns = TRUE,
+  cluster_columns = FALSE,
+  column_split = c(1,1,2,2,3,3),
   show_column_names = FALSE,
   show_heatmap_legend = TRUE,
   column_dend_side = "top",
@@ -48,7 +63,7 @@ figE <- ComplexHeatmap::Heatmap(
   column_km = 3,
   row_km = 10,
   cell_fun = function(j, i, x, y, w, h, col) { # add text to each grid
-    grid.text(figETxtRds[i, j], x, y - (h / 4), gp = gpar(fontsize = 3.5, hjust = 0.5, vjust = 0.5))
+    grid.text(figETxtRds[i, j], x, y, gp = gpar(fontsize = 3, hjust = 0.5, vjust = 0.5))
   },
   bottom_annotation = ComplexHeatmap::HeatmapAnnotation(
     `Phenotype` = str_split_fixed(colnames(figERds), "_", n = 2)[, 1],
@@ -90,9 +105,10 @@ figE <- ComplexHeatmap::Heatmap(
 layout <- c(
   area(1, 1, 4, 2), #a
   area(1, 3, 4, 4), #b
-  area(5, 1, 8, 2), #c
-  area(5, 3, 8, 4),  #d
-  area(1, 5, 8, 12)  #e
+  area(5, 1, 6, 2), #c
+  area(5, 3, 7, 4),  #d
+  area(1, 5, 8, 12),  #e
+  area(7, 1, 8, 3)  #f
 )
 
 p <- figA + figB + figC + figD +
@@ -102,11 +118,13 @@ p <- figA + figB + figC + figD +
   wrap_elements(grid.grabExpr(draw(figE, heatmap_legend_side = "bottom",
     annotation_legend_side = "bottom",
     merge_legend = TRUE))) +
+  wrap_elements(plot = figF) +
   plot_annotation(tag_levels = list(c(letters[1:7]))) +
   plot_layout(design = layout)
 
 saveFinalFigure(plot = p, fn = "fig4_art", devices = c("png", "pdf"), gwidth = 8.25, gheight = 7)
 
+warnings()
 
 # figA <- readRDS("../outs/rds/art_lollipop_deseq2.rds")
 # figB <- readRDS("../outs/rds/art_lollipop_negbinom.rds")

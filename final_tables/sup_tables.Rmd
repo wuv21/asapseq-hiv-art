@@ -8,11 +8,15 @@ output:
   pdf_document:
     latex_engine: xelatex
 geometry: margin=1.5cm
-mainfont: Arial
+mainfont: Roboto
+mainfontoptions:
+- BoldFont: Roboto-Bold
+- ItalicFont: Roboto-Italic
 fontsize: 10pt
 ---
 
 ```{r setup, include=FALSE}
+rmarkdown::find_pandoc(version = '1.12.3.1')
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -92,7 +96,7 @@ prepareDEMarkerTableCompiled <- function(fns, descriptors, idCol = "Subset") {
 
 **Supplemental Table 2:** Significant surface markers enriched in each cluster (over all other cells) for *in vitro* model.
 ```{r, echo=FALSE, message=FALSE}
-prepareDEMarkerTable("../outs/tsv/inVitro_initClusterMarkers.tsv")
+prepareDEMarkerTable("../outs/tsv/invitro_initClusterMarkers.tsv")
 ```
 
 \pagebreak
@@ -114,6 +118,7 @@ prepareDEMarkerTableCompiled(
 
 \pagebreak
 \blandscape
+
 **Supplemental Table 4:** Differential peak list for activated CD4+ cells between HIV+ and HIV- for *in vitro* model.
 ```{r, echo=FALSE, message=FALSE}
 ivPeakListActivated <- read.csv("../outs/tsv/invitro_markerTest_activatedPeaks_topPeaks.tsv", sep = "\t")
@@ -145,48 +150,34 @@ kbl(ivPeakListActivated, booktabs = T, align = "c", longtable = TRUE, linesep = 
 
 \pagebreak
 
-**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during chronic infection.
-```{r, echo=FALSE, message=FALSE}
-prepareDEMarkerTable("../outs/tsv/chronic_initClusterMarkers.tsv")
-```
-
-\pagebreak
-
-**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during chronic infection.
-```{r, echo=FALSE, message=FALSE}
-prepareDEMarkerTableCompiled(
-  fns = c(
-    "../outs/tsv/chronic_markers.tsv",
-    "../outs/tsv/chronic_tfh_markers.tsv"),
-  descriptors = c(
-    "CD4+",
-    "Tfh CD4+"
-  )
-)
-```
-
-\pagebreak
-
-**Supplemental Table 7:** Significant surface markers enriched in each cluster (over all other cells) during treated infection.
+**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during treated infection.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/art_initClusterMarkers.tsv")
 ```
 
 \pagebreak
 
-**Supplemental Table 8:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection.
+**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTableCompiled(
   fns = c(
-    "../outs/tsv/art_markers.tsv"),
+    "../outs/tsv/art_markersDEseq2.tsv",
+    "../outs/tsv/art_markersWilcox.tsv",
+    "../outs/tsv/art_tcmttm_markers.tsv",
+    "../outs/tsv/art_tem_markers.tsv"
+  ),
   descriptors = c(
-    "CD4+"
+    "CD4+ (DESeq2)",
+    "CD4+ (Wilcoxon)",
+    "Tcm/Ttm (DESeq2)",
+    "Tem (DESeq2)"
   )
 )
 ```
 
 \pagebreak
-**Supplemental Table 9:** Autologous virus sequences used in study.
+
+**Supplemental Table 7:** Autologous virus sequences used in study.
 ```{r, echo=FALSE, message=FALSE}
 viralSeqs <- read.csv("../viralFastas/infoForSupplemental.csv", sep = ",", check.names = FALSE)
 

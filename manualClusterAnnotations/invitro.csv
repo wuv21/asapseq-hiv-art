@@ -1,10 +1,10 @@
-﻿cluster,annotation
-C9,CD4 Tcm #2
-C8,CD4 Tcm #1
-C7,CD4 Naive/early memory
-C6,CD4 Activated #2
-C5,CD4 Activated #1
-C4,CD4 Treg
-C3,CD4 Activated/effector
+cluster,annotation
+C8,CD4 Tcm #2
+C7,CD4 Tcm #1
+C6,CD4 Naive/early memory
+C5,CD4 Activated #2
+C4,CD4 Activated #1
+C3,CD4 Treg
+C10,CD4 Activated/effector
 C2,Monocyte
 C1,B

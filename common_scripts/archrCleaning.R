@@ -8,6 +8,8 @@ filterClusterByProp <- function(proj, proportion, cluster) {
   clusterSize <- table(clusters) / length(proj$cellNames) * 100
   clusterSizeFilt <- clusterSize >= proportion
   
+  print(paste0("filtering out outliers: ", length(proj$cellNames) - sum(clusterSizeFilt)))
+  
   idxClusterPass <- BiocGenerics::which(clusterSizeFilt[clusters])
   cellsClusterPass <- proj$cellNames[idxClusterPass]
   proj_clustFilt <- proj[cellsClusterPass, ]
@@ -44,7 +46,7 @@ addHaystackData <- function(proj, haystackParentDir, haystackSamples) {
   
   haystackPosCells <- haystackDf %>%
     group_by(sample, newCbc) %>%
-    summarize(totalFrags = n())
+    dplyr::summarize(totalFrags = n())
   
   matchedHaystackArchRCells <- intersect(haystackPosCells$newCbc, proj$cellNames)
   

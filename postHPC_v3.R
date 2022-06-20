@@ -1,7 +1,7 @@
 ###############################################################################
 # pkg and custom scripts
 ###############################################################################
-suppressMessages(library(tidyverse))
+suppressMessages(library(dplyr))
 suppressMessages(library(ArchR))
 suppressMessages(library(GenomicFeatures))
 suppressMessages(library(rtracklayer))
@@ -13,6 +13,7 @@ library(ggrastr)
 library(ggpubr)
 library(biomaRt)
 library(ComplexHeatmap)
+library(BSgenome.Hsapiens.UCSC.hg38)
 
 source("common_scripts/graphs.R")
 source("common_scripts/archrCleaning.R")
@@ -99,9 +100,9 @@ ivPreProcessed <- loadProcessedProj(
   generateNewUmapSettings = list(
     "reducedDims" = "IterativeLSI",
     "name" = "UMAP2",
-    "nNeighbors" = 200,
+    "nNeighbors" = 300,
     "force" = TRUE,
-    "minDist" = 0.3),
+    "minDist" = 0.4),
   generateNewClusterSettings = list(
     "method" = "Seurat",
     "name" = "Clusters2",
@@ -137,9 +138,10 @@ artPreProcessed <- loadProcessedProj(
     "reducedDims" = "Harmony",
     "method" = "Seurat",
     "name" = "Clusters2",
-    "resolution" = 0.75
+    "resolution" = 0.6
   ),
-  runPreAnnot = FALSE,
+  runPreAnnot = TRUE,
+  force = TRUE,
   runPreAnnotIsoComps = isoComparisonsART,
   prefixForGraphs = "art"
 )
@@ -191,10 +193,36 @@ plotDiscreteLollipop(projInvitro_matched, "inVitro_discreteHivOnly_matched",
   cluster = "manualClusterAnnot",
   graphType = "hivOnly")
 
-
 ###############################################################################
 # art manual annot
 ###############################################################################
+
+tmp <- loadArchRProject("old/A08A01B45A09_qcfiltTSS8_matched.old/")
+
+tmpDf <- data.frame(
+  cbc = projART_matched$cellNames,
+  newAnnot = projART_matched$Clusters2
+)
+
+tmpDf2 <- data.frame(
+  cbc = tmp$cellNames,
+  oldAnnot = tmp$Clusters2
+)
+
+tmpDf <- tmpDf %>%
+  left_join(tmpDf2, by = "cbc") %>%
+  dplyr::group_by(newAnnot, oldAnnot) %>%
+  dplyr::tally() %>%
+  group_by(newAnnot) %>%
+  mutate(groupSum = sum(n)) %>%
+  mutate(freqOfNew = n / groupSum)
+
+ggplot(tmpDf, aes(x = newAnnot, y = oldAnnot, color = freqOfNew)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_distiller(palette = "YlOrRd", direction = 1)
+
+
 projART_matched <- assignManualAnnotation(archrProj = projART_matched,
   cluster = "Clusters2",
   annotFn = "manualClusterAnnotations/art.csv")
@@ -258,8 +286,8 @@ plotDiscreteLollipop(projART_matched, "art_discreteHivOnly_matched_byDonor",
 invitro_tcells_check <- grepl("^CD4", adtInvitro_matched$manualClusterAnnot)
 invitro_tcells <- adtInvitro_matched$haystackOut[invitro_tcells_check]
 invitro_markers <- findHIVDifferentialMarkers(seu = adtInvitro_matched,
-  cellsPos = names(invitro_tcells[invitro_tcells]),
-  cellsNeg = names(invitro_tcells[!invitro_tcells]),
+  identPos = names(invitro_tcells[invitro_tcells]),
+  identNeg = names(invitro_tcells[!invitro_tcells]),
   featuresToUse = invitroAdtToUse,
   tsa_catalog = tsa_catalog)
 
@@ -270,8 +298,8 @@ invitro_activeLaterCells <- adtInvitro_matched$haystackOut[grepl("CD4 Activated"
 invitro_activeLate_markers <- findHIVDifferentialMarkers(
   seu = adtInvitro_matched,
   tsa_catalog = tsa_catalog,
-  cellsPos = names(invitro_activeLaterCells[invitro_activeLaterCells]),
-  cellsNeg = names(invitro_activeLaterCells[!invitro_activeLaterCells]),
+  identPos = names(invitro_activeLaterCells[invitro_activeLaterCells]),
+  identNeg = names(invitro_activeLaterCells[!invitro_activeLaterCells]),
   featuresToUse = invitroAdtToUse)
 
 makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_activeLate")
@@ -294,8 +322,8 @@ invitro_earlyCells <- adtInvitro_matched$haystackOut[grepl("(Tcm|early)", adtInv
 invitro_early_markers <- findHIVDifferentialMarkers(
   seu = adtInvitro_matched,
   tsa_catalog = tsa_catalog,
-  cellsPos = names(invitro_earlyCells[invitro_earlyCells]),
-  cellsNeg = names(invitro_earlyCells[!invitro_earlyCells]),
+  identPos = names(invitro_earlyCells[invitro_earlyCells]),
+  identNeg = names(invitro_earlyCells[!invitro_earlyCells]),
   featuresToUse = invitroAdtToUse)
 
 makeDifferentialLollipop(invitro_early_markers, "invitro_lollipop_early")
@@ -322,13 +350,16 @@ if (!dir.exists(invitroGcPeakFn)) {
   
   projInvitro_matched <- addGroupCoverages(ArchRProj = projInvitro_matched,
     groupBy = "condensedHivCluster",
+    useLabels = FALSE,
+    minCells = 300,
     minReplicates = 3,
-    minCells = 333,
     force = TRUE)
   
   projInvitro_matched <- addReproduciblePeakSet(
     ArchRProj = projInvitro_matched,
-    groupBy = "condensedHivCluster", 
+    groupBy = "condensedHivCluster",
+    peaksPerCell = 750,
+    minCells = 100,
     pathToMacs2 = "/home/wuv/anaconda3/envs/asapseq/bin/macs2",
     force = TRUE
   )
@@ -472,56 +503,6 @@ for (tmp in iv_genesOfInterest) {
       pal = c(HIVNEGCOLOR, HIVPOSCOLOR), borderWidth = 0, sizes = c(3,2,1))[[tmp]],
     fn = paste0("invitro_activated_", tmp))
 } 
-
-invitro_markerTest_early <- getMarkerFeatures(
-  ArchRProj = projInvitro_matched_gcPeak, 
-  useMatrix = "PeakMatrix",
-  groupBy = "condensedHivCluster",
-  testMethod = "wilcoxon",
-  bias = c("TSSEnrichment", "log10(nFrags)"),
-  useGroups = c("Naive_earlyMemory_TRUE", "Tcm_TRUE"),
-  bgdGroups = c("Naive_earlyMemory_FALSE", "Tcm_FALSE"),
-  maxCells = 1000,
-  verbose = FALSE
-)
-
-plotVolcanoFromGetMarkerFeatures(invitro_markerTest_early,
-  fn = "invitro_peaks_volcano_earlyHIV")
-
-# chromVAR analysis
-invitro_chromvar_markerTest <- getMarkerFeatures(
-  ArchRProj = projInvitro_matched_gcPeak,
-  useMatrix = "MotifMatrix",
-  groupBy = "condensedHivCluster",
-  testMethod = "wilcoxon",
-  bias = c("TSSEnrichment", "log10(nFrags)"),
-  useGroups = "Activated_TRUE",
-  bgdGroups = "Activated_FALSE",
-  maxCells = 1000,
-  verbose = FALSE,
-  useSeqnames = "z"
-)
-
-plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest, chromVARmode = TRUE,
-  fn = "invitro_volcano_motifs_chromVAR")
-
-plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHIVneg", direction = "negative")
-plotMotifDot(invitro_chromvar_markerTest, "invitro_chromVAR_motifsUp_activatedHIVpos", direction = "positive")
-
-invitro_chromvar_markerTest_early <- getMarkerFeatures(
-  ArchRProj = projInvitro_matched_gcPeak,
-  useMatrix = "MotifMatrix",
-  groupBy = "condensedHivCluster",
-  testMethod = "wilcoxon",
-  bias = c("TSSEnrichment", "log10(nFrags)"),
-  useGroups = "Tcm_TRUE",
-  bgdGroups = "Tcm_FALSE",
-  verbose = FALSE,
-  useSeqnames = "z"
-)
-
-plotVolcanoFromGetMarkerFeatures(invitro_chromvar_markerTest_early, chromVARmode = TRUE,
-  fn = "invitro_volcano_motifs_early_chromVAR")
 
 ###############################################################################
 # iv model analysis
@@ -683,63 +664,82 @@ randomForest::importance(invitroActRF$`RF (all)`, type = "1") %>%
 ###############################################################################
 art_tcells_check <- (grepl("CD4", adtART_matched$manualClusterAnnot))
 art_tcells <- adtART_matched$haystackOut[art_tcells_check]
-art_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
-  cellsPos = names(art_tcells[art_tcells]),
-  cellsNeg = names(art_tcells[!art_tcells]),
+art_markersLR <- findHIVDifferentialMarkers(
+  seu = adtART_matched,
+  identPos = names(art_tcells[art_tcells]),
+  identNeg = names(art_tcells[!art_tcells]),
   featuresToUse = ARTAdtToUse,
-  findMarkerMethod = "negbinom",
+  findMarkerMethod = "LR",
+  logfc.threshold = 0.1,
   tsa_catalog = tsa_catalog,
   latent.vars = c("individual", "manualClusterAnnot"))
 
-makeDifferentialLollipop(art_markers, "art_lollipop_negbinom")
-exportTsv(art_markers)
+makeDifferentialLollipop(art_markersLR, "art_lollipop_LR")
+exportTsv(art_markersLR)
 
-tmp <- findHIVDifferentialMarkers(seu = adtART_matched,
-  cellsPos = names(art_tcells[art_tcells]),
-  cellsNeg = names(art_tcells[!art_tcells]),
+art_markersDEseq2 <- findHIVDifferentialMarkers(
+  seu = adtART_matched,
+  identPos = names(art_tcells[art_tcells]),
+  identNeg = names(art_tcells[!art_tcells]),
   featuresToUse = ARTAdtToUse,
   findMarkerMethod = "DESeq2",
-  tsa_catalog = tsa_catalog,
-  latent.vars = c("individual", "manualClusterAnnot"))
-makeDifferentialLollipop(tmp, "art_lollipop_deseq2")
+  logfc.threshold = 0.1,
+  tsa_catalog = tsa_catalog)
+
+makeDifferentialLollipop(art_markersDEseq2, "art_lollipop_deseq2")
+exportTsv(art_markersDEseq2)
+
+art_markersWilcox <- findHIVDifferentialMarkers(
+  seu = adtART_matched,
+  identPos = names(art_tcells[art_tcells]),
+  identNeg = names(art_tcells[!art_tcells]),
+  featuresToUse = ARTAdtToUse,
+  logfc.threshold = 0.1,
+  findMarkerMethod = "wilcox",
+  tsa_catalog = tsa_catalog)
+
+makeDifferentialLollipop(art_markersWilcox, "art_lollipop_wilcox")
+exportTsv(art_markersWilcox)
+
 
 plotVlnEnhanced(adtART_matched, cells = names(art_tcells),
-  feats = art_markers$gene,
-  separator = art_markers$Status,
-  titles = art_markers$cleanName,
-  fn = "art_tcells_vln")
-
+  feats = art_markersWilcox$gene,
+  separator = art_markersWilcox$Status,
+  titles = art_markersWilcox$cleanName,
+  fn = "art_tcells_vln_wilcox")
 
 ### run on a less condensed HIV Cluster grouping
+artTestingDf <- data.frame(
+  manual = projART_matched$manualClusterAnnot,
+  cellNames = projART_matched$cellNames,
+  haystackOut = projART_matched$haystackOut) %>%
+  mutate(lessCondensed = case_when(
+    !grepl("^CD4", manual) ~ "Other",
+    grepl("MAIT", manual) ~ "MAIT",
+    grepl("Tcm", manual) ~ "Tcm/Ttm",
+    TRUE ~ "Tem"
+  )) %>%
+  mutate(lessCondensedHivClust = paste(lessCondensed, haystackOut, sep = "_"))
+
+projART_matched <- addCellColData(ArchRProj = projART_matched,
+  data = artTestingDf$lessCondensedHivClust,
+  cells = artTestingDf$cellNames,
+  name = "lessCondensedHivClust",
+  force = TRUE)
+
+rm(artTestingDf)
+
 artLessGcPeakFn <- paste0(getOutputDirectory(projART_matched), "_lessCondensed_gcPeakCalled")
 if (!dir.exists(artLessGcPeakFn)) {
-  artTestingDf <- data.frame(
-    manual = projART_matched$manualClusterAnnot,
-    cellNames = projART_matched$cellNames,
-    haystackOut = projART_matched$haystackOut) %>%
-    mutate(lessCondensed = case_when(
-      !grepl("^CD4", manual) ~ "Other",
-      grepl("MAIT", manual) ~ "MAIT",
-      grepl("Tcm", manual) ~ "Tcm/Ttm",
-      TRUE ~ "Tem"
-    )) %>%
-    mutate(lessCondensedHivClust = paste(lessCondensed, haystackOut, sep = "_"))
-  
-  projART_matched <- addCellColData(ArchRProj = projART_matched,
-    data = artTestingDf$lessCondensedHivClust,
-    cells = artTestingDf$cellNames,
-    name = "lessCondensedHivClust",
-    force = TRUE)
-  
   projART_matchedLess_subset <- projART_matched[!grepl("Other", projART_matched$lessCondensedHivClust), ]
   
   projART_matchedLess_subset <- addGroupCoverages(
     ArchRProj = projART_matchedLess_subset,
     groupBy = "lessCondensedHivClust",
     minReplicates = 2,
-    minCells = 18,
+    minCells = 16,
     force = TRUE,
-    sampleRatio = 0.95)
+    sampleRatio = 0.9)
   
   projART_matchedLess_subset <- addReproduciblePeakSet(
     ArchRProj = projART_matchedLess_subset,
@@ -766,40 +766,12 @@ if (!dir.exists(artLessGcPeakFn)) {
   projART_matchedLess_subset_gcPeak <- loadArchRProject(artLessGcPeakFn)
 }
 
+
+##############
+### Checkpoint
+##############
 save.image(paste(format(Sys.time(), "%Y-%m-%d-%H-%M"), "RData", sep = "."))
 
-tmp <- function() {
-  set.seed(21)
-  
-  v1 <- getMarkerFeatures(
-    ArchRProj = projART_matchedLess_subset_gcPeak, 
-    useMatrix = "MotifMatrix",
-    groupBy = "lessCondensedHivClust",
-    bias = c("TSSEnrichment", "log10(nFrags)"),
-    verbose = FALSE,
-    useSeqnames = "z",
-  )
-  
-  v2 <- getMarkerFeatures(
-    ArchRProj = projART_matchedLess_subset_gcPeak,
-    useMatrix = "MotifMatrix",
-    useGroups = "Tcm/Ttm_FALSE",
-    groupBy = "lessCondensedHivClust",
-    bias = c("TSSEnrichment", "log10(nFrags)"),
-    verbose = FALSE,
-    useSeqnames = "z",
-  )
-  
-  return(list(v1, v2))
-}
-
-tmp2 <- tmp()
-
-lapply(tmp2, function(x) {
-  tmp3 <- getMarkers(x, cutOff = "FDR < 0.01")
-  
-  return(tmp3$`Tcm/Ttm_FALSE`)
-})
 
 artLess_markerTest_deviations <- getMarkerFeatures(
   ArchRProj = projART_matchedLess_subset_gcPeak, 
@@ -811,18 +783,19 @@ artLess_markerTest_deviations <- getMarkerFeatures(
 )
 
 # plots the mean z score for each motif...
+
+heatmapCutoff <- "FDR < 0.05 & MeanDiff > 0.5"
 artLess_markerTest_deviations_heatmap <- plotMarkerHeatmap(
   seMarker = artLess_markerTest_deviations, 
   log2Norm = FALSE,
-  cutOff = "FDR < 0.05 & MeanDiff > 0.5", nLabel = 5,
+  cutOff = heatmapCutoff,
   transpose = FALSE,
   returnMatrix = TRUE,
   scaleRows = FALSE
 )
 
-
 artLess_markerTest_deviations_heatmapText <- bind_rows(
-  lapply(getMarkers(artLess_markerTest_deviations, cutOff = "FDR < 0.05 & MeanDiff > 0.5"), function(x) {
+  lapply(getMarkers(artLess_markerTest_deviations, cutOff = heatmapCutoff), function(x) {
     return(as.data.frame(x))
   }
   ), .id = "group")
@@ -837,8 +810,8 @@ for (i in seq_along(artLess_markerTest_deviations_heatmapText$group)) {
   row <- artLess_markerTest_deviations_heatmapText[i, ]
   
   artLess_markerTest_deviations_heatmapSig[row$name, row$group] <- case_when(
-    row$FDR < 0.01 ~ "**",
-    row$FDR < 0.05 ~ "*",
+    row$FDR < 0.01 ~ "✱✱",
+    row$FDR < 0.05 ~ "✱",
     TRUE ~ " ")
 }
 
@@ -852,19 +825,20 @@ tmp <- ComplexHeatmap::Heatmap(
   show_row_names = FALSE,
   row_dend_side = "left",
   show_row_dend = TRUE,
-  cluster_columns = TRUE,
+  cluster_columns = FALSE,
+  column_split = c(1,1,2,2,3,3),
   show_column_names = FALSE,
   show_heatmap_legend = TRUE,
   column_dend_side = "top",
   column_title = NULL,
   cell_fun = function(j, i, x, y, w, h, col) { # add text to each grid
-    grid.text(artLess_markerTest_deviations_heatmapSig[i, j], x, y, gp = gpar(fontsize = 5, hjust = 0.5, vjust = 0.5))
+    grid.text(artLess_markerTest_deviations_heatmapSig[i, j], x, y, gp = gpar(fontsize = 2.5, hjust = 0.5, vjust = 0.5))
   },
   heatmap_legend_param = list(
     legend_direction = "horizontal",
     legend_width = unit(3, "cm")),
   show_column_dend = TRUE,
-  column_km = 3,
+  # column_km = 3,
   row_km = 10,
   bottom_annotation = ComplexHeatmap::HeatmapAnnotation(
     `Phenotype` = str_split_fixed(colnames(artLess_markerTest_deviations_heatmap), "_", n = 2)[, 1],
@@ -896,6 +870,7 @@ artLess_markerTest_tem_deviations <- getMarkerFeatures(
   useMatrix = "MotifMatrix",
   useGroups = "Tem_TRUE",
   bgdGroups = "Tem_FALSE",
+  closest = FALSE,
   groupBy = "lessCondensedHivClust",
   bias = c("TSSEnrichment", "log10(nFrags)"),
   verbose = FALSE,
@@ -904,47 +879,102 @@ artLess_markerTest_tem_deviations <- getMarkerFeatures(
 plotMotifDot(artLess_markerTest_tem_deviations, "art_chromVAR_tem_motifsUp_HIVneg", direction = "negative", pValMax = 0.05, showTopNByPVal = 10)
 plotMotifDot(artLess_markerTest_tem_deviations, "art_chromVAR_tem_motifsUp_HIVpos", direction = "positive", pValMax = 0.05, showTopNByPVal = 10)
 
-art_ccr5_track <- plotBrowserTrack2(projART_matched,
-  geneSymbol = "CCR5",
-  useGroups = c("T cell_FALSE", "T cell_TRUE"),
-  groupBy = "condensedHivCluster",
-  upstream = 10000, downstream = 10000,
-  scCellsMax = 750,
-  plotSummary = c("bulkTrack", "scTracK", "geneTrack"),
-  pal = c(HIVNEGCOLOR, HIVPOSCOLOR), borderWidth = 0, sizes = c(3,2,1))$CCR5
+artLess_markerTest_tcmttm_deviations <- getMarkerFeatures(
+  ArchRProj = projART_matchedLess_subset_gcPeak, 
+  useMatrix = "MotifMatrix",
+  useGroups = "Tcm/Ttm_TRUE",
+  bgdGroups = "Tcm/Ttm_FALSE",
+  closest = FALSE,
+  groupBy = "lessCondensedHivClust",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  verbose = FALSE,
+  useSeqnames = "z",
+)
+plotMotifDot(artLess_markerTest_tcmttm_deviations,
+  "art_chromVAR_tcmttm_motifsUp_HIVneg", direction = "negative", pValMax = 0.05, showTopNByPVal = 10)
+plotMotifDot(artLess_markerTest_tcmttm_deviations,
+  "art_chromVAR_tcmttm_motifsUp_HIVpos", direction = "positive", pValMax = 0.05, showTopNByPVal = 15, alphaBySig = TRUE)
 
-cleanUpTrackAndSave(art_ccr5_track, fn = "art_ccr5")
+plotEnhancedMotifDot(
+  markerFeatures = artLess_markerTest_tcmttm_deviations,
+  fn = "art_chromVAR_tcmttm_motifsUp_HIVpos_enhanced",
+  preFilter = "meandiff > 0",
+  xVar = "motif",
+  yVar = "fdr",
+  colorVar = "meandiff",
+  showTopNByPVal = 15
+)
+
+plotEnhancedMotifDot(
+  markerFeatures = artLess_markerTest_tcmttm_deviations,
+  preFilter = "meandiff < 0",
+  xVar = "motif",
+  yVar = "fdr",
+  colorVar = "meandiff",
+  showTopNByPVal = 15
+)
+
+artLess_markerTest_mait_deviations <- getMarkerFeatures(
+  ArchRProj = projART_matchedLess_subset_gcPeak, 
+  useMatrix = "MotifMatrix",
+  useGroups = "MAIT_TRUE",
+  bgdGroups = "MAIT_FALSE",
+  closest = FALSE,
+  groupBy = "lessCondensedHivClust",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  verbose = FALSE,
+  useSeqnames = "z",
+)
+plotMotifDot(artLess_markerTest_mait_deviations,
+  "art_chromVAR_mait_motifsUp_HIVneg", direction = "negative", pValMax = 0.05, showTopNByPVal = 10)
+plotMotifDot(artLess_markerTest_mait_deviations,
+  "art_chromVAR_mait_motifsUp_HIVpos", direction = "positive", pValMax = 0.05, showTopNByPVal = 10)
+
+
+# art_ccr5_track <- plotBrowserTrack2(projART_matched,
+#   geneSymbol = "CCR5",
+#   useGroups = c("T cell_FALSE", "T cell_TRUE"),
+#   groupBy = "condensedHivCluster",
+#   upstream = 10000, downstream = 10000,
+#   scCellsMax = 750,
+#   plotSummary = c("bulkTrack", "scTracK", "geneTrack"),
+#   pal = c(HIVNEGCOLOR, HIVPOSCOLOR), borderWidth = 0, sizes = c(3,2,1))$CCR5
+# 
+# cleanUpTrackAndSave(art_ccr5_track, fn = "art_ccr5")
 
 # adt analysis on the less condensed cluster form
 adtART_matched$lessCondensedHivClust <- projART_matched$lessCondensedHivClust
 
 art_tcmttm_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
-  cellsPos = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "Tcm/Ttm_TRUE"]),
-  cellsNeg = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "Tcm/Ttm_FALSE"]),
+  identPos = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "Tcm/Ttm_TRUE"]),
+  identNeg = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "Tcm/Ttm_FALSE"]),
   featuresToUse = ARTAdtToUse,
   findMarkerMethod = "DESeq2",
+  logfc.threshold = 0.1,
   tsa_catalog = tsa_catalog)
 
 makeDifferentialLollipop(art_tcmttm_markers, "art_tcmttm_markers")
 exportTsv(art_tcmttm_markers)
 
 art_tem_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
-  cellsPos = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "Tem_TRUE"]),
-  cellsNeg = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "Tem_FALSE"]),
+  identPos = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "Tem_TRUE"]),
+  identNeg = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "Tem_FALSE"]),
   featuresToUse = ARTAdtToUse,
   findMarkerMethod = "DESeq2",
+  logfc.threshold = 0.1,
   tsa_catalog = tsa_catalog)
 
 makeDifferentialLollipop(art_tem_markers, "art_tem_markers")
 exportTsv(art_tem_markers)
 
-art_mait_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
-  cellsPos = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "MAIT_TRUE"]),
-  cellsNeg = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "MAIT_FALSE"]),
-  featuresToUse = ARTAdtToUse,
-  findMarkerMethod = "DESeq2",
-  tsa_catalog = tsa_catalog)
-
+# art_mait_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
+#   identPos = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "MAIT_TRUE"]),
+#   identNeg = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "MAIT_FALSE"]),
+#   featuresToUse = ARTAdtToUse,
+#   findMarkerMethod = "wilcox",
+#   logfc.threshold = 0.1,
+#   tsa_catalog = tsa_catalog)
+# 
 # makeDifferentialLollipop(art_mait_markers, "art_mait_markers")
 # exportTsv(art_mait_markers)
 
@@ -1078,6 +1108,61 @@ makeFancyUpsetPlotHIV(
 )
 
 save.image()
+
+salantesData <- data.frame(
+  sample = c("A09_pre", "A09_post", "A01", "A08"),
+  iupm = c(0.614, 1.237, 8.35, 0.141),
+  total_dna = c(1208.3, 1221.8, 293.8, 1564.5),
+  rna = c(10834.7, 7203.2, 754.1, 4528.3)
+)
+
+rownames(salantesData) <- salantesData$sample
+
+data.frame(table(projART_matched$individual, projART_matched$haystackOut)) %>%
+  as_tibble() %>%
+  dplyr::rename(sample = Var1,
+    hivPos = Var2,
+    freq = Freq) %>%
+  group_by(sample) %>%
+  mutate(sample_total = sum(freq)) %>%
+  group_by(sample, hivPos) %>%
+  mutate(prop = freq / sample_total * 100) %>%
+  mutate(sample = as.character(sample)) %>%
+  mutate(hivPos = as.logical(hivPos)) %>%
+  filter(hivPos & sample != "B45") %>% 
+  left_join(salantesData) %>%
+  select(sample, hivPos, 5:8) %>%
+  mutate(total_dna = log10(total_dna)) %>%
+  mutate(rna = log10(rna)) %>%
+  mutate(iupm = log10(iupm)) %>%
+  pivot_longer(iupm:rna, names_to = "metric", values_to = "value") %>%
+  ggplot(aes(y = prop, x = value)) +
+  geom_point(aes(color = sample)) +
+  facet_wrap(~ metric, scales = "free_x") +
+  geom_smooth(method='lm', formula= y ~ x) +
+  stat_cor(label.y = 0.3, method = "spearman", cor.coef.name = "rho") +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+
+
+tmp2 <- invitro_markerTest_activatedPeaks_topPeaks %>%
+  mutate(finder = gsub(",", "|", inGene)) %>%
+  mutate(finder = paste0("(", finder, ")")) %>%
+  mutate(finder2 = gsub(",", "|", nearestTSS)) %>%
+  mutate(finder2 = paste0("(", finder, ")"))
+
+
+tmp2$inGeneInteractHIV <- sapply(tmp2$finder, function(x) {
+  hit <- grepl(x, tmp$Human_GeneSymbol)
+  return(paste(tmp$Interaction_Desc[hit], collapse = " | "))
+  
+})
+  
+tmp2$nearestInteractHIV <- sapply(tmp2$finder2, function(x) {
+  hit <- grepl(x, tmp$Human_GeneSymbol)
+  return(paste(tmp$Interaction_Desc[hit], collapse = " | "))
+})
+
 
 # makeFancyUpsetPlotHIV(
 #   seu = adtART_matched,

@@ -7,7 +7,10 @@ figD <- readRDS("../outs/rds/inVitro_discreteHivOnly_matched.rds")
 figE <- readRDS("../outs/rds/invitro_lollipop_activeLate.rds")
 
 a_legend <- as_ggplot(get_legend(figA + 
-    guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 2, title = "Legend\nfor (a)")) +
+    guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 2,
+      title.position = "top",
+      title.hjust = 0,
+      title = "Legend for (a)")) +
     theme(legend.margin=margin(0,0,0,0),
       legend.box.margin=margin(-10,-10,-10,-10),
       legend.justification = "left",
@@ -15,7 +18,10 @@ a_legend <- as_ggplot(get_legend(figA +
       legend.title = element_text(size = 8, color = "#000000"))))
 
 b_legend <- as_ggplot(get_legend(figB + 
-    guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1, title = "Legend\nfor (b)")) +
+    guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1,
+      title = "Legend for (b)",
+      title.position = "top",
+      title.hjust = 0)) +
     theme(
       legend.margin=margin(0,0,0,0),
       legend.box.margin=margin(-10,-10,-10,-10),
@@ -41,11 +47,11 @@ figABLegend <- (
   a_legend + 
     subplotTheme +
     theme(
-      plot.margin = unit(c(0, 0, 0, -10), "pt"))) /
+      plot.margin = unit(c(0, 0, 0, -15), "pt"))) /
   (b_legend +
     subplotTheme +
     theme(
-      plot.margin = unit(c(-50, 0, 0, -10), "pt")))
+      plot.margin = unit(c(-50, 0, 0, -15), "pt")))
 
 layout <- c(
   area(1, 1, 2, 4), #ab
@@ -55,7 +61,7 @@ layout <- c(
   area(2, 7, 5, 9) #e
 )
 
-p <- wrap_elements(figAB, ignore_tag = TRUE) +
+p <- wrap_elements(full = figAB, ignore_tag = TRUE) +
   wrap_elements(figABLegend, ignore_tag = TRUE) + 
   wrap_elements(figC + subplotTheme) +
   wrap_elements(figD + subplotTheme + theme(plot.margin = unit(c(0, 0, 0, 10), "pt"))) +

@@ -4,8 +4,8 @@ findHIVDifferentialMarkers <- function(
   tsa_catalog,
   identPos = NULL,
   identNeg = NULL,
-  cellsPos = NULL,
-  cellsNeg = NULL,
+  # cellsPos = NULL,
+  # cellsNeg = NULL,
   featuresToUse = tsa_catalog[!tsa_catalog$isCtrl, "DNA_ID"],
   ident = "haystackOut",
   assay = "tsa",
@@ -15,29 +15,21 @@ findHIVDifferentialMarkers <- function(
   ...
 ) {
   
-  if (is.null(cellsPos)) {
-    Idents(seu) <- ident
-    markers <- FindMarkers(seu,
-      ident.1 = identPos,
-      ident.2 = identNeg,
-      assay = "tsa",
-      slot = "data",
-      test.use = findMarkerMethod,
-      features = featuresToUse, ...)
-  } else {
-    seuAssay <- GetAssay(seu, assay)
-    
-    markers <- FindMarkers(seuAssay,
-      cells.1 = cellsPos,
-      cells.2 = cellsNeg,
-      # slot = "counts",
-      test.use = findMarkerMethod,
-      features = featuresToUse, ...)    
-  }
-
+  # Idents(seu) <- ident
+  markers <- FindMarkers(
+    object = seu,
+    ident.1 = identPos,
+    ident.2 = identNeg,
+    assay = "tsa",
+    test.use = findMarkerMethod,
+    features = featuresToUse,
+    ...)
+  
   if (!"gene" %in% colnames(markers)) {
     markers$gene <- rownames(markers)
   }
+  
+  print(head(markers))
   
   filteredMarkers <- markers %>%
     left_join(tsa_catalog %>% dplyr::select(DNA_ID, cleanName), by = c("gene" = "DNA_ID")) %>% 

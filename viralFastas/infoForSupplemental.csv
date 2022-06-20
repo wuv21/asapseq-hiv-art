@@ -1,5 +1,6 @@
-﻿Individual,Fasta Prefix or Name,Location,Publication
+Individual,Fasta Prefix or Name,Location,Publication
 A08,chrA08,GenBank; Supplementary File 1,"Gondim et al., 2021"
+A09,chrA09,GenBank; Supplementary File 1,"Gondim et al., 2021"
 A01,chrA01.,Supplementary File 1,This paper
 B45,chrBEAT2045_,Supplementary File 1,This paper
 C01,HXB2,GenBank (K03455.1),"Ratner et al., 1985"

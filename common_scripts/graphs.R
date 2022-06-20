@@ -90,7 +90,7 @@ generateUmapDfFromArchR <- function(
   
   if (is.vector(cluster) && length(cluster) > 1) {
     tmp <- getCellColData(proj, select = cluster)
-    tmp <- unite(as.data.frame(tmp), col = "tmp", sep = ": ")
+    tmp <- tidyr::unite(as.data.frame(tmp), col = "tmp", sep = ": ")
     df$cluster <- tmp$tmp
     
   } else {
@@ -201,27 +201,24 @@ plotUmap <- function(
   if (!is.null(colorBy) & !is.null(colorLabelBy)) {
     clusterLabelUmapPos <- df %>% 
       group_by(colorLabelCluster) %>% 
-      summarize(
+      dplyr::summarize(
         topX = quantile(x, c(.6)),
         topY = quantile(y, c(.6)),
         bottomX = quantile(x, c(.4)),
         bottomY = quantile(y, c(.4)),
         x = (topX + bottomX) / 2,
         y = (topY + bottomY) / 2)
-        # medianX = median(x),
-        # medianY = median(y),
-        # iqrXFactor = IQR(x) * 0.4,
-        # iqrYFactor = IQR(y) * 0.4,
-        # x = mean(x[x > (medianX - iqrXFactor) & x < (iqrXFactor + medianX)]),
-        # y = mean(y[y > (medianY - iqrYFactor) & y < (iqrYFactor + medianY)]))
     
     p1 <- p1 + 
       ggrepel::geom_label_repel(data = clusterLabelUmapPos,
         aes(x = x, y = y, label = colorLabelCluster),
         label.size = 0.05,
-        force = 10,
+        force = 300,
+        max.time = 5,
+        max.iter = 25000,
         size = BASEFONTSIZE,
-        min.segment.length = 0,
+        seed = 21,
+        min.segment.length = 0.25,
         segment.color = "#BBBBBB")
   }
   
@@ -345,7 +342,7 @@ plotDiscreteLollipop <- function(proj,
       dfAggr <- dfg %>%
         ungroup() %>%
         group_by(cluster) %>%
-        summarize(n = sum(n)) %>%
+        dplyr::summarize(n = sum(n)) %>%
         mutate(donor = "Aggregate")
       
       if (is.null(donorColumnOrder)) {
@@ -700,11 +697,80 @@ plotMotifRank <- function(
   savePlot(plot = g, fn = fn, devices = devices, gheight = 2.5, gwidth = 2.5)
 }
 
+plotEnhancedMotifDot <- function(
+  markerFeatures,
+  fn,
+  xVar,
+  yVar,
+  xLbl = rlang::as_name(xVar),
+  yLbl = rlang::as_name(yVar), 
+  colorVar,
+  subtitle = paste0(xLbl, " vs ", yLbl),
+  preFilter = NULL,
+  devices = c("png", "rds"),
+  alphaByPVal = NULL,
+  pValMax = 0.05,
+  showTopNByPVal = NULL
+) {
+  
+  .xVar <- rlang::parse_expr(xVar)
+  .yVar <- rlang::parse_expr(yVar)
+  .colorVar <- rlang::parse_expr(colorVar)
+  pValMax <- -1 * log10(pValMax)
+  
+  df <- data.frame(
+    fdr = -1 * log10(assays(markerFeatures)$FDR[, 1]),
+    meandiff = assays(markerFeatures)$MeanDiff[, 1],
+    motif = elementMetadata(markerFeatures)$name)
+  
+  if (!is.null(preFilter)) {
+    preFilter <- rlang::parse_expr(preFilter)
+    df <- dplyr::filter(df, !!preFilter)
+  }
+  
+  if (!is.null(showTopNByPVal)) {
+    df <- df[order(df$fdr, decreasing = TRUE), ]
+    df <- df[c(1:showTopNByPVal), ]
+  } else {
+    df <- filter(df, fdr > pValMax)
+    df <- df[order(df$fdr, decreasing = TRUE), ]
+  }
+  df$motif <- factor(df$motif, levels = df$motif)
+  
+  g <- ggplot(df, aes(x = !!.xVar, y = !!.yVar))
+  
+  if (!is.null(showTopNByPVal) & yLbl == "fdr") {
+    g <- g + geom_hline(yintercept = pValMax, linetype = "dotted", color = "#00000075")
+  }
+  
+  g <- g +
+    geom_point(aes(color = !!.colorVar)) +
+    theme_classic() +
+    coord_cartesian(clip = "off") +
+    theme(
+      axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+      axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
+      axis.title = element_text(size = BASEPTFONTSIZE),
+      legend.position = "right"
+    ) +
+    labs(
+      x = xLbl,
+      y = yLbl,
+      subtitle = subtitle)
+  
+  gwidth <- ifelse(nrow(df) >= 5, nrow(df) / 5, 3)
+  savePlot(plot = g, fn = fn, devices = devices, gheight = 2, gwidth = gwidth)
+}
+
+
+
 plotMotifDot <- function(
   markerFeatures,
   fn,
   direction = "positive",
   devices = c("png", "rds"),
+  alphaBySig = FALSE,
+  colorBySig = FALSE,
   pValMax = 0.05,
   showTopNByPVal = NULL
 ) {
@@ -720,6 +786,11 @@ plotMotifDot <- function(
   } else {
     df <- filter(df, meandiff > 0)
     pointColor <- HIVPOSCOLOR
+  }
+  
+  if (alphaBySig) {
+    df <- df %>%
+      mutate(pointColor = ifelse(y > -log10(pValMax), pointColor, paste0(pointColor, "50")))
   }
   
   if (!is.null(showTopNByPVal)) {
@@ -738,7 +809,7 @@ plotMotifDot <- function(
   }
   
   g <- g +
-    geom_point(color = pointColor) +
+    geom_point(aes(color = pointColor)) +
     theme_classic() +
     coord_cartesian(clip = "off") +
     theme(
@@ -746,6 +817,7 @@ plotMotifDot <- function(
       axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
       axis.title = element_text(size = BASEPTFONTSIZE)
     ) +
+    scale_color_identity() +
     labs(x = "Motif",
       y = "-log10(FDR)")
   
@@ -860,6 +932,7 @@ plotVolcanoFromGetMarkerFeatures <- function(
   
   savePlot(plot = g, fn = fn, devices = devices, gheight = 3, gwidth = 3)
 }
+
 
 plotGeneAnnot <- function(geneAnnots) {
   g <- ggplot(geneAnnots, aes(x = startPos, xend = endPos, y = annotation, yend = annotation)) +
@@ -1203,7 +1276,7 @@ plotUpsetCBC <- function(
   }
   
   df <- df %>%
-    summarize(n = n()) %>%
+    dplyr::summarize(n = n()) %>%
     ungroup()
   
   nudgeBuffer <- 0.05
@@ -1384,8 +1457,8 @@ plotLogitRegressionVolcano <- function(
     mutate(direction = coeff > 0)
 
   
-  yMin <- -log10(0.05) * 1.2
-  yMax <- -log10(min(df$p))
+  yMin <- -log10(0.05) * 1.3
+  yMax <- -log10(min(df$p)) * 1.5
   
   dfLbl <- df %>%
     filter(p < 0.05) %>%
@@ -1400,9 +1473,9 @@ plotLogitRegressionVolcano <- function(
     theme_classic() +
     scale_color_manual(values = c("#dddddd", HIVNEGCOLOR, HIVPOSCOLOR)) +
     geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "#cccccc") +
-    geom_text(data = dfLbl, aes(x = x, y = y, label = cleanName, hjust = ifelse(coeff > 0, 0, 1)), size = 1.75) +
+    geom_text(data = dfLbl, aes(x = x, y = y, label = cleanName, hjust = ifelse(coeff > 0, 0, 1)), size = 1.5) +
     geom_segment(data = dfLbl, aes(x = x * 0.98, xend = coeff, y = y, yend = -log10(p)), size = 0.25, alpha = 0.5) +
-    xlim(-2, 2) +
+    xlim(-2.25, 2.25) +
     coord_cartesian(clip = "off") +
     theme(
       legend.position = "none",
@@ -1443,7 +1516,7 @@ makeFancyUpsetPlotHIV <- function(
     group_by(meta) %>%
     mutate(totalGroup = n()) %>%
     group_by(meta, celltype, .drop = FALSE) %>%
-    summarize(totalN = n()) %>%
+    dplyr::summarize(totalN = n()) %>%
     group_by(meta) %>%
     mutate(totalMeta = sum(totalN)) %>%
     mutate(prop = totalN / totalMeta) %>%
