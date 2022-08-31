@@ -17,7 +17,7 @@
 #' @return A list of Seurat objects containing background filtered, normalized, and scaled ADT data.
 
 
-createSeuList <- function(samples, adtDir, filename, sampleSuffix = "_count_out", seed = 21) {
+createSeuList <- function(samples, adtDir, filename, sampleSuffix = "_count_out", seed = 21, emptyDropsLower = 500) {
   set.seed(seed)
   
   seuList <- lapply(samples, function(x) {
@@ -32,7 +32,7 @@ createSeuList <- function(samples, adtDir, filename, sampleSuffix = "_count_out"
     rownames(adt_matrix) <- feats$V1
     colnames(adt_matrix) <- cbcs$V1
     
-    empty_calc <- emptyDrops(adt_matrix, lower = 500)
+    empty_calc <- emptyDrops(adt_matrix, lower = emptyDropsLower)
     adt_filt <- adt_matrix[, which(empty_calc$FDR < 0.01)]
     
     adt <- CreateSeuratObject(counts = adt_filt, assay = "tsa", project = x)

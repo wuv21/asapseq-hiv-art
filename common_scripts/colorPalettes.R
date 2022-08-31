@@ -1,3 +1,5 @@
+library(Polychrome)
+
 multiHueColorPalette <- c(
   "#016eb7",
   "#48b200",
@@ -22,3 +24,10 @@ multiHueColorPalette <- c(
   "#ff7d6c",
   "#363472",
   "#751d00")
+
+nColorPalette <- function(n, seed = 9, initcolors = c("#ff0000", "#00ff00", "#0000ff")) {
+  set.seed(seed)
+  p <- Polychrome::createPalette(n, seedcolors = initcolors)
+  
+  return(unname(p))
+}

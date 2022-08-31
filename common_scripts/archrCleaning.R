@@ -2,6 +2,13 @@
 # Filter small clusters based on proportion
 ######
 filterClusterByProp <- function(proj, proportion, cluster) {
+  # if proportion = NA, skip filtering
+  if (is.na(proportion)) {
+    print("No filtering as proportion = NA.")
+    
+    return(proj)
+  }
+  
   # filter cells that are in small clusters
   clusters <- getCellColData(proj, select = cluster)[, 1]
   

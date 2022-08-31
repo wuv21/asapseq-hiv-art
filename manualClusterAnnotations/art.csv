@@ -1,19 +1,22 @@
 cluster,annotation
-C1,Multiplet/Mix
-C10,CD4 Tcm/Ttm
-C11,CD4 Tcm/MAIT
-C12,CD4 cTfh/Tcm #2
-C13,CD4 cTfh/Tcm #1
-C14,CD4 MAIT
-C15,CD4 Tcm/Ttm (recently activated)
-C16,CD4 Th2/Tcm
-C18,Monocyte/APC
-C19,Monocyte/Other
-C2,CD4 Tem
-C20,B
-C3,NK/Other
-C4,CD4 Tem/Th1 CD127+
-C5,CD4 Tem/Activated/Cytotoxic
-C6,CD4 Tem/effector
-C7,Monocyte/APC/Other
-C9,CD4 Treg
+C9,NK/NKT
+C8,Mix/Other #1
+C7,Monocyte/APC/Other #1
+C6,Monocyte/APC/Other #2
+C5,Mix/Other #2
+C4,B #1
+C3,B #2
+C21,CD4 cTfh
+C20,CD4 Tcm/MAIT
+C2,Multiplet/Mix
+C19,CD4 Treg
+C18,CD4 MAIT
+C17,CD4 Tcm/Ttm (recently activated)
+C16,CD4 Tcm/Ttm
+C15,CD4 Th2/Tcm
+C14,CD4 Tcm/Ttm
+C13,CD4 Tem/Activated/Cytotoxic
+C12,CD4 Tem/effector
+C11,NK/Other
+C10,CD4 Tem
+C1,DC

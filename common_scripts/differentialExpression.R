@@ -29,7 +29,7 @@ findHIVDifferentialMarkers <- function(
     markers$gene <- rownames(markers)
   }
   
-  print(head(markers))
+  print(head(markers, 10))
   
   filteredMarkers <- markers %>%
     left_join(tsa_catalog %>% dplyr::select(DNA_ID, cleanName), by = c("gene" = "DNA_ID")) %>% 
@@ -37,12 +37,8 @@ findHIVDifferentialMarkers <- function(
     filter(p_val_adj < 0.05) %>%
     # filter(avg_log2FC > 0) %>% 
     mutate(piScore = avg_log2FC * -log10(p_val_adj)) %>%
-    arrange(desc(piScore), .by_group = TRUE) %>%
+    dplyr::arrange(dplyr::desc(piScore), .by_group = TRUE) %>%
     mutate(Status = ifelse(avg_log2FC > 0, statusPos, statusNeg))
-  
-  # clean_VlnPlot(VlnPlot(seuMerge_matched, features = filteredHivPosMarkers$gene, combine = FALSE),
-  #   newTitle = filteredHivPosMarkers$cleanName,
-  #   finalplotCol = 4)
   
   return(filteredMarkers)
 }

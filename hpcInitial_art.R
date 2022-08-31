@@ -5,7 +5,7 @@ suppressMessages(library(stringr))
 
 set.seed(21)
 
-addArchRThreads(threads = 2)
+addArchRThreads(threads = 4)
 addArchRGenome("hg38")
 
 # make vector of unwanted "chromosomes"/scaffolds
@@ -16,29 +16,34 @@ chrNamesDiscard <- c(chrNamesDiscard, chrNames[grepl("^(chrA08|chrA01|chrBEAT204
 
 
 # 10x file locations
-samples_a08 <- c("A08_1", "A08_2", "A08_4")
+samples_a08 <- c("A08_1", "A08_2", "A08_4", "A08_pre_1", "A08_pre_2", "A08_pre_3", "A08_pre_4")
 fragmentsFN_a08 <- paste0("../asapseq-hiv-art-atacData/", samples_a08, "/fragments.tsv.gz")
-# make arrow files
+samplenames_a08 <- samples_a08
+samplenames_a08[1:3] <- gsub("A08", "A08_post", samples_a08[1:3])
+
 arrowfile_a08 <- createArrowFiles(inputFiles = fragmentsFN_a08,
-  sampleNames = samples_a08,
+  sampleNames = samplenames_a08,
   minTSS = 4,
   minFrags = 1000,
   addTileMat = TRUE,
   excludeChr = chrNamesDiscard,
-  subThreading = TRUE, #some issue with hdf5
-  force = FALSE, # if don't want to rewrite
+  subThreading = TRUE,
+  force = FALSE,
   addGeneScoreMat = TRUE)
 
-samples_a01 <- c("A01_1", "A01_2", "A01_3", "A01_4")
+samples_a01 <- c("A01_1", "A01_2", "A01_3", "A01_4", "A01_pre_1", "A01_pre_2", "A01_pre_3")
 fragmentsFN_a01 <- paste0("../asapseq-hiv-art-atacData/", samples_a01, "/fragments.tsv.gz")
+samplenames_a01 <- samples_a01
+samplenames_a01[1:4] <- gsub("A01", "A01_post", samples_a01[1:4])
+
 arrowfile_a01 <- createArrowFiles(inputFiles = fragmentsFN_a01,
-  sampleNames = samples_a01,
+  sampleNames = samplenames_a01,
   minTSS = 4,
   minFrags = 1000,
   addTileMat = TRUE,
   excludeChr = chrNamesDiscard,
-  subThreading = TRUE, #some issue with hdf5
-  force = FALSE, # if don't want to rewrite
+  subThreading = TRUE,
+  force = FALSE,
   addGeneScoreMat = TRUE)
 
 
@@ -51,23 +56,22 @@ arrowfile_b45 <- createArrowFiles(inputFiles = fragmentsFN_b45,
   minFrags = 1000,
   addTileMat = TRUE,
   excludeChr = chrNamesDiscard,
-  subThreading = TRUE, #some issue with hdf5
-  force = FALSE, # if don't want to rewrite
+  subThreading = TRUE,
+  force = FALSE,
   addGeneScoreMat = TRUE)
 
 samples_a09 <- c("A09_pre_1", "A09_pre_2", "A09_pre_3", "A09_pre_4", "A09_pre_5", "A09_pre_6",
                 "A09_post_2", "A09_post_3", "A09_post_4", "A09_post_5", "A09_post_6")
 fragmentsFN_a09 <- paste0("../asapseq-hiv-art-atacData/", samples_a09, "/fragments.tsv.gz")
 arrowfile_a09 <- createArrowFiles(inputFiles = fragmentsFN_a09,
-                                  sampleNames = samples_a09,
-                                  minTSS = 4,
-                                  minFrags = 1000,
-                                  addTileMat = TRUE,
-                                  excludeChr = chrNamesDiscard,
-                                  subThreading = TRUE, #some issue with hdf5
-                                  force = FALSE, # if don't want to rewrite
-                                  addGeneScoreMat = TRUE)
-
+  sampleNames = samples_a09,
+  minTSS = 4,
+  minFrags = 1000,
+  addTileMat = TRUE,
+  excludeChr = chrNamesDiscard,
+  subThreading = TRUE,
+  force = FALSE,
+  addGeneScoreMat = TRUE)
 
 
 combinedArrowFiles <- c(arrowfile_a08, arrowfile_a01, arrowfile_b45, arrowfile_a09)
@@ -111,11 +115,12 @@ if (!dir.exists(qcFiltProjDir)) {
 
   projQcFilter$individual <- stringr::str_match(projQcFilter$cellNames, "\\w\\d{2}(_pre|_post)*")[, 1]
 
+  # harmony changed to sample, not individual
   projQcFilter <- addHarmony(
     ArchRProj = projQcFilter,
     reducedDims = "IterativeLSI",
     name = "Harmony",
-    groupBy = "individual"
+    groupBy = "Sample"
   )
 
   projQcFilter <- saveArchRProject(

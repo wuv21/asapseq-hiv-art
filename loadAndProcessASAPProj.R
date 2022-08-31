@@ -13,6 +13,7 @@ loadProcessedProj <- function(
   runPreAnnot = TRUE,
   runPreAnnotIsoComps = NULL,
   plotGraphs = TRUE, # plot graphs,
+  filterProp = 0.5,
   prefixForGraphs = deparse(substitute(proj)), # name of files to save
   force = FALSE # remake processed folder
 ) {
@@ -39,7 +40,7 @@ loadProcessedProj <- function(
     }
     
     # adjust cluster
-    proj_matched <- filterClusterByProp(proj_matched, proportion = 0.5, cluster = clusterName)
+    proj_matched <- filterClusterByProp(proj_matched, proportion = filterProp, cluster = clusterName)
 
   } else {
     proj_matched <- loadArchRProject(projMatchedDir, force = TRUE, showLogo = FALSE)
@@ -50,12 +51,21 @@ loadProcessedProj <- function(
   if (plotGraphs) {
     print("Plotting in process")
     
+    nClusters <- getCellColData(proj_matched, select = clusterName)[, 1]
+    nClusters <- length(unique(nClusters))
+    
+    if (nClusters <= length(multiHueColorPalette)) {
+      umapColorScheme <- scale_color_manual(values = multiHueColorPalette)
+    } else {
+      umapColorScheme <- scale_color_manual(values = nColorPalette(nClusters))
+    }
+    
     plotUmap(
       proj_matched,
       fn = paste0(prefixForGraphs, "_umap_unannotCluster"),
       colorBy = clusterName,
       embedding = umapName,
-      colorScheme = scale_color_manual(values = multiHueColorPalette))
+      colorScheme = umapColorScheme)
     
     plotUmap(
       proj_matched,

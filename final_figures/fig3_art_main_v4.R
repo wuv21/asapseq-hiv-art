@@ -6,7 +6,7 @@ figC <- readRDS("../outs/rds/art_discreteAbsolute_matched_byDonor.rds")
 figD <- readRDS("../outs/rds/art_discreteHivOnly_matched_byDonor.rds")
 
 a_legend <- as_ggplot(get_legend(figA + 
-    guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), nrow = 10,
+    guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), nrow = 11,
       title = "Legend for (a)",
       title.position = "top",
       title.hjust = 0)) +
@@ -34,7 +34,7 @@ figABLegend[[1]] <- figABLegend[[1]] +
   theme(plot.margin = margin(t = 20, l = 10))
 
 figABLegend[[2]] <- figABLegend[[2]] +
-  theme(plot.margin = margin(t = -50, b = 75, l = 10))
+  theme(plot.margin = margin(t = -40, b = 70, l = 10))
 
 figA <- figA + umapPlotThemeNoLeg +
   subplotTheme

@@ -82,31 +82,54 @@ generateUmapDfFromArchR <- function(
   
   umapFromArchr <- getEmbedding(proj, embedding = embedding)
   
+  # check to make sure embedding order is same as project order
+  if (rownames(umapFromArchr) != proj$cellNames) {
+    print("Embedding rownames from getEmbedding() not in the same order as ArchR project's cell names")
+    print("Fixing now")
+    
+    # sort embedding df by proj$cellNames
+    umapFromArchr <- umapFromArchr[proj$cellNames, ]
+  }
+  
+  # check to make sure that all of getCellColData is in the same order too
+  stopifnot(
+    rownames(getCellColData(proj, select = secondGraphColumn)[, 1]) != proj$cellNames,
+    rownames(getCellColData(proj, select = cluster)[, 1]) != proj$cellNames
+  )
+  
   df <- data.frame(x = umapFromArchr[, 1],
     y = umapFromArchr[, 2],
     secondMetadata = getCellColData(proj, select = secondGraphColumn)[, 1],
     sample = proj$Sample)
     
-  
   if (is.vector(cluster) && length(cluster) > 1) {
     tmp <- getCellColData(proj, select = cluster)
-    tmp <- tidyr::unite(as.data.frame(tmp), col = "tmp", sep = ": ")
-    df$cluster <- tmp$tmp
+    tmp <- tidyr::unite(as.data.frame(tmp), col = "cluster", sep = ": ")
+    
+    df$cluster <- tmp$cluster
     
   } else {
-    df$cluster <- getCellColData(proj, select = cluster)[, 1]
+    tmp <- data.frame(cluster = getCellColData(proj, select = cluster)[, 1])
     
     if (customSort) {
-      df$cluster <- factor(df$cluster, levels = customSortAnnotation(df$cluster))
+      tmp$cluster <- factor(tmp$cluster, levels = customSortAnnotation(tmp$cluster))
     }
+    
+    df$cluster <- tmp$cluster
   }
   
   if (!is.null(colorLabelCluster)) {
-    df$colorLabelCluster <- getCellColData(proj, select = colorLabelCluster)[, 1]
+    tmp <- getCellColData(proj, select = colorLabelCluster)[, 1]
+  
+    stopifnot(rownames(tmp) != proj$cellNames)
+    df$colorLabelCluster <- tmp
   }
   
   if (!is.null(donorColumn)) {
-    df$donor <- getCellColData(proj, select = donorColumn)[, 1]
+    tmp <- getCellColData(proj, select = donorColumn)[, 1]
+    
+    stopifnot(rownames(tmp) != proj$cellNames)
+    df$donor <- tmp
   }
   
   return(df)
@@ -613,7 +636,7 @@ makeDifferentialLollipop <- function(
   devices = c("png", "rds")) {
   
   pSapPi <- markers %>%
-    arrange(desc(abs(piScore)), .by_group = TRUE) %>%
+    dplyr::arrange(dplyr::desc(abs(piScore)), .by_group = TRUE) %>%
     mutate(cleanName = factor(cleanName, levels = rev(cleanName))) %>%
     mutate(markerColor = ifelse(piScore > 0, HIVPOSCOLOR, HIVNEGCOLOR)) %>%
     {ggplot(., aes(x = abs(piScore), y = cleanName, color = markerColor)) +
@@ -751,6 +774,11 @@ plotEnhancedMotifDot <- function(
       axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
       axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
       axis.title = element_text(size = BASEPTFONTSIZE),
+      text = element_text(size = BASEPTFONTSIZE),
+      legend.title = element_text(size = BASEPTFONTSIZE),
+      legend.text = element_text(size = BASEPTFONTSIZE),
+      legend.key.width = unit(BASEPTFONTSIZE, 'pt'),
+      legend.key.height = unit(BASEPTFONTSIZE * 2, 'pt'),
       legend.position = "right"
     ) +
     labs(
@@ -758,7 +786,7 @@ plotEnhancedMotifDot <- function(
       y = yLbl,
       subtitle = subtitle)
   
-  gwidth <- ifelse(nrow(df) >= 5, nrow(df) / 5, 3)
+  gwidth <- ifelse(nrow(df) >= 5, nrow(df) / 4.5, 3)
   savePlot(plot = g, fn = fn, devices = devices, gheight = 2, gwidth = gwidth)
 }
 

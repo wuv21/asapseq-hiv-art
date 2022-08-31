@@ -11,8 +11,7 @@ figF <- readRDS("../outs/rds/art_chromVAR_tcmttm_motifsUp_HIVpos_enhanced.rds")
 
 titleTheme <- subplotTheme + theme(
   plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
-  axis.text = element_text(size = 6),
-  axis.title = element_blank())
+  axis.text = element_text(size = 6))
 
 figA <- figA + labs(title = "All T cells (DESeq2)") + titleTheme
 figB <- figB + labs(title = "All T cells (Wilcoxon)") + titleTheme
@@ -69,7 +68,7 @@ figE <- ComplexHeatmap::Heatmap(
     `Phenotype` = str_split_fixed(colnames(figERds), "_", n = 2)[, 1],
     `HIV` = ifelse(str_split_fixed(colnames(figERds), "_", n = 2)[, 2] == "TRUE", "HIV+", "HIV-"),
     col = list(
-      `Phenotype` = c("Tem" = "#1b9e77", "MAIT" = "#d95f02", "Tcm/Ttm" = "#7570b3"),
+      `Phenotype` = c("Tem/effector" = "#1b9e77", "MAIT" = "#d95f02", "Tcm/Ttm" = "#7570b3"),
       `HIV` = c("HIV+" = "#e63946", "HIV-" = "#999999")
     ),
     simple_anno_size = convertHeight(unit(1/nrow(figERds) * 2, "npc"), "mm"),
@@ -104,9 +103,9 @@ figE <- ComplexHeatmap::Heatmap(
 
 layout <- c(
   area(1, 1, 4, 2), #a
-  area(1, 3, 4, 4), #b
+  area(1, 3, 3, 4), #b
   area(5, 1, 6, 2), #c
-  area(5, 3, 7, 4),  #d
+  area(4, 3, 7, 4),  #d
   area(1, 5, 8, 12),  #e
   area(7, 1, 8, 3)  #f
 )
@@ -125,49 +124,4 @@ p <- figA + figB + figC + figD +
 saveFinalFigure(plot = p, fn = "fig4_art", devices = c("png", "pdf"), gwidth = 8.25, gheight = 7)
 
 warnings()
-
-# figA <- readRDS("../outs/rds/art_lollipop_deseq2.rds")
-# figB <- readRDS("../outs/rds/art_lollipop_negbinom.rds")
-# figC <- readRDS("../outs/rds/art_volcano_motifs_chromVAR.rds")
-# figD <- readRDS("../outs/rds/art_volcano_motifs_chromVAR_lola_encode.rds")
-# 
-# titleTheme <- subplotTheme + theme(plot.title = element_text(size = 8, hjust = 0.5, margin = margin(t = -10, b = 10)))
-# figA <- figA + labs(title = "DESeq2") + titleTheme
-# figB <- figB + labs(title = "Neg. binomial") + titleTheme
-# 
-# figC <- figC + 
-#   labs(title = "CISBP") + 
-#   titleTheme + 
-#   theme(legend.margin=margin(3,0,0,0), legend.box.margin=margin(-10,-10,-10,-10))
-#   
-# figD <- figD + 
-#   labs(title = "ENCODE (from LOLA)") + 
-#   titleTheme + theme(legend.margin=margin(3,0,0,0), legend.box.margin=margin(-10,-10,-10,-10))
-# 
-# decreaseText <- function(x) {
-#   x$layers[[3]]$aes_params$size <- 4 / ggplot2:::.pt
-#   
-#   return(x)
-# }
-# 
-# figC <- decreaseText(figC)
-# figD <- decreaseText(figD)
-# 
-# 
-# 
-# layout <- c(
-#   area(1, 1, 4, 3), #a
-#   area(1, 4, 4, 6), #b
-#   area(5, 1, 7, 3), #c
-#   area(5, 4, 7, 6)  #d
-# )
-# 
-# p <- wrap_elements(figA) +
-#   wrap_elements(figB) +
-#   wrap_elements(figC) +
-#   wrap_elements(figD) +
-#   plot_annotation(tag_levels = list(c(letters[1:7]))) +
-#   plot_layout(design = layout)
-# 
-# saveFinalFigure(plot = p, fn = "fig4_art", devices = c("png", "pdf"), gwidth = 8, gheight = 7)
 
