@@ -12,8 +12,8 @@ subplotTheme <- theme(
   plot.title.position = "plot",
   plot.title = element_text(size = 12, margin = margin(0,0,0,0), hjust = 0),
   plot.margin = unit(c(0,0,0,0), "pt"),
-  panel.background = element_rect(fill = "transparent", colour = NA),
-  plot.background = element_rect(fill = "transparent", colour = NA),
+  panel.background = element_rect(fill = "transparent", colour = NA_character_),
+  plot.background = element_rect(fill = "transparent", colour = NA_character_),
   text = element_text(family = "Arial"),
   rect = element_rect(fill = "transparent", colour = NULL)
 )
@@ -47,6 +47,19 @@ umapPlotThemeLeg <- theme(
 
 wrapNewAnnotLevel <- function(p) {
   return(p + plot_layout(tag_level = "new"))
+}
+
+unclipStripText <- function(g) {
+  g2 <- patchworkGrob(g)
+  for (i in which(grepl("strip-r", g2$layout$name))){
+
+    g2$grobs[[i]]$layout$clip <- "off"
+    g2$grobs[[i]]$layout$z <- Inf
+    
+    print(g2$grobs[[i]]$layout)
+  }
+  
+  return(g)
 }
 
 saveFinalFigure <- function(

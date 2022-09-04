@@ -82,10 +82,12 @@ generateUmapDfFromArchR <- function(
   
   umapFromArchr <- getEmbedding(proj, embedding = embedding)
   
+  # check to make sure df is the same size as expected
+  stopifnot(nrow(umapFromArchr) == length(proj$cellNames))
+  
   # check to make sure embedding order is same as project order
-  if (rownames(umapFromArchr) != proj$cellNames) {
-    print("Embedding rownames from getEmbedding() not in the same order as ArchR project's cell names")
-    print("Fixing now")
+  if (sum(rownames(umapFromArchr) == proj$cellNames) != length(proj$cellNames)) {
+    message("Embedding rownames from getEmbedding() not in the same order as ArchR project's cell names. Will fix now.")
     
     # sort embedding df by proj$cellNames
     umapFromArchr <- umapFromArchr[proj$cellNames, ]
@@ -93,8 +95,8 @@ generateUmapDfFromArchR <- function(
   
   # check to make sure that all of getCellColData is in the same order too
   stopifnot(
-    rownames(getCellColData(proj, select = secondGraphColumn)[, 1]) != proj$cellNames,
-    rownames(getCellColData(proj, select = cluster)[, 1]) != proj$cellNames
+    sum(rownames(getCellColData(proj, select = secondGraphColumn)) == proj$cellNames) == length(proj$cellNames),
+    sum(rownames(getCellColData(proj, select = cluster)) == proj$cellNames) == length(proj$cellNames)
   )
   
   df <- data.frame(x = umapFromArchr[, 1],
@@ -179,7 +181,7 @@ plotUmap <- function(
   
   if (bringToTop) {
     df <- df %>%
-      arrange(cluster)
+      dplyr::arrange(cluster)
   }
   
   if (length(colorBy) == 1 && colorBy == "haystackOut") {
@@ -294,8 +296,12 @@ plotDiscreteLollipop <- function(proj,
   if (!is.null(donorColumn) & !is.null(donorColumnOrder)) {
     df <- df %>%
       mutate(donor = factor(donor, levels = donorColumnOrder))
+  } else if(!is.null(donorColumn)) {
+    uniqueDonors <- sort(unique(df$donor))
+    df <- df %>%
+      mutate(donor = factor(donor, levels = uniqueDonors))
   }
-  
+
   if (graphType == "absolute") {
     dfg <- df %>%
       mutate(hivPos = factor(ifelse(secondMetadata, "Pos", "Neg")))
@@ -368,11 +374,7 @@ plotDiscreteLollipop <- function(proj,
         dplyr::summarize(n = sum(n)) %>%
         mutate(donor = "Aggregate")
       
-      if (is.null(donorColumnOrder)) {
-        donorLvls <- c(sort(unique(dfg$donor)), "Aggregate")
-      } else {
-        donorLvls <- c(levels(dfg$donor), "Aggregate")
-      }
+      donorLvls <- c(levels(dfg$donor), "Aggregate")
       
       dfg <- dfg %>% 
         bind_rows(dfAggr) %>%
@@ -659,6 +661,48 @@ makeDifferentialLollipop <- function(
   savePlot(plot = pSapPi, fn = fn, devices = devices, gheight = 2 + (nrow(markers) * 0.08), gwidth = 3)
 }
 
+makeDifferentialLollipop2 <- function(
+    markers,
+  fn,
+  devices = c("png", "rds")) {
+
+  pSapPi <- markers %>%
+    dplyr::arrange(dplyr::desc(abs(piScore)), .by_group = TRUE) %>%
+    mutate(cleanName = factor(cleanName, levels = rev(cleanName))) %>%
+    mutate(markerColor = ifelse(piScore > 0, HIVPOSCOLOR, HIVNEGCOLOR)) %>%
+    mutate(graphingP = -log10(p_val_adj)) %>%
+    {ggplot(., aes(x = graphingP, y = cleanName, fill = avg_log2FC)) +
+        geom_segment(aes(x = 0, xend = graphingP, y = cleanName, yend = cleanName), linetype = "dotted", color = "#555555") +
+        geom_point(size = 1.75, shape = 21, color = "#000000") + 
+        labs(y = "Surface marker",
+          x = "-log10(p adj)",
+          fill = "log2(fold change)") +
+        guides(fill = guide_colorbar(
+          title.position = "left",
+          title.hjust = 1,
+          title.vjust = 1,
+          barwidth = 4,
+          barheight = 0.36)) +
+        scale_x_continuous(expand = c(0, 0), limits = c(0, max(abs(.$graphingP) + 0.3))) +
+        theme_classic() +
+        theme(
+          axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
+          axis.title = element_text(size = BASEPTFONTSIZE),
+          legend.position = "bottom",
+          legend.margin = margin(-5, 10, -5, -30, "pt"),
+          plot.margin = unit(c(-20, 0, 0, 0), "pt"),
+          legend.title = element_text(size = BASEPTFONTSIZE, margin = margin(0, 0, 0, 0)),
+          legend.text = element_text(size = BASEPTFONTSIZE - 1, angle = 90, hjust = 1, vjust = 0.5),
+          panel.background = element_rect(fill = NULL, colour = NULL),
+          strip.background = element_blank(),
+          strip.placement = "outside") +
+        scale_fill_gradient2(midpoint = 0, low = "blue", mid = "white", high = "red") +
+        coord_cartesian(clip = "off") +
+        facet_grid(Status ~ ., scales = "free", space = "free")} 
+  
+  savePlot(plot = pSapPi, fn = fn, devices = devices, gheight = 2 + (nrow(markers) * 0.08), gwidth = 3)
+}
+
 plotMotifRank <- function(
   motifChanged,
   fn,
@@ -770,6 +814,7 @@ plotEnhancedMotifDot <- function(
     geom_point(aes(color = !!.colorVar)) +
     theme_classic() +
     coord_cartesian(clip = "off") +
+    scale_color_distiller(palette = "YlOrRd", direction = 1) +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
       axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
@@ -943,7 +988,7 @@ plotVolcanoFromGetMarkerFeatures <- function(
     dfLbl <- dfTopN %>%
       mutate(xLbl = ifelse(x > 0, max(df$x) + 0.1, min(df$x) - 0.1)) %>%
       group_by(direction) %>%
-      arrange(desc(y)) %>%
+      dplyr::arrange(desc(y)) %>%
       mutate(gid = seq_along(motif)) %>%
       mutate(yLbl = (yMax - yMin) / (max(gid) - 1) * (max(gid) - gid) + yMin)
     
@@ -1115,11 +1160,11 @@ plotFragMultiGraph <- function(
   
   inferredCoverage <- inferredCoverage %>%
     filter(n() == 2) %>%
-    arrange(min(startBp, endBp), .by_group = TRUE) %>%
-    filter(first(endBp) < last(startBp)) %>%
-    summarise(
-      inferredStart = first(endBp) + 1,
-      inferredEnd = last(startBp) - 1)
+    dplyr::arrange(min(startBp, endBp), .by_group = TRUE) %>%
+    filter(dplyr::first(endBp) < dplyr::last(startBp)) %>%
+    dplyr::summarise(
+      inferredStart = dplyr::first(endBp) + 1,
+      inferredEnd = dplyr::last(startBp) - 1)
   
   annotG <- plotGeneAnnot(geneAnnots)
   distG <- plotFragDistribution(frags, coverage, inferredCoverage)
@@ -1214,7 +1259,7 @@ plogFragMultiAnnotGraph <- function(
   tmpN <- df %>%
     ungroup() %>%
     dplyr::group_by(seqname) %>%
-    summarise(count = length(unique(cbc)))
+    dplyr::summarise(count = length(unique(cbc)))
     
   regionG <- .spaceFacetRelative(regionG, tmpN$count)
   annotG <- .spaceFacetRelative(annotG, tmpN$count)
@@ -1492,7 +1537,7 @@ plotLogitRegressionVolcano <- function(
     filter(p < 0.05) %>%
     mutate(x = ifelse(coeff > 0, 1.25, -1.25)) %>%
     group_by(direction) %>%
-    arrange(p, .by_group = TRUE) %>%
+    dplyr::arrange(p, .by_group = TRUE) %>%
     mutate(gid = seq_along(cleanName)) %>%
     mutate(y = (yMax - yMin) / (max(gid) - 1) * (max(gid) - gid) + yMin)
   

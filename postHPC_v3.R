@@ -50,6 +50,7 @@ set.seed(21) # for reproducibility
 ###############################################################################
 tsa_catalog <- readRDS("rds/tsa_catalog.rds")
 load("rds/invitro_seuratMerged.RData")
+load("rds/chronic_seuratMerged.RData")
 load("rds/ART_seuratMerged.RData")
 
 ###############################################################################
@@ -63,6 +64,21 @@ haystackInVitro <- addHaystackData(proj = projInVitro,
 
 projInVitro <- haystackInVitro$newProj
 
+
+###############################################################################
+# load in chronic project from preHPC 
+###############################################################################
+projChronic <- loadArchRProject(path = "C01C02_qcfiltTSS6/", showLogo = FALSE)
+
+uniqChronicSamples <- unique(projChronic$Sample)
+haystackSamplePairingChronic <- paste0(uniqChronicSamples, "_hxb2")
+names(haystackSamplePairingChronic) <- uniqChronicSamples
+
+haystackChronic <- addHaystackData(proj = projChronic,
+  haystackParentDir = "data/hiv-haystack",
+  haystackSamples = haystackSamplePairingChronic)
+
+projChronic <- haystackChronic$newProj
 
 ###############################################################################
 # load in art project from preHPC 
@@ -123,6 +139,39 @@ invitroAdtToUse <- ivPreProcessed$adtToUse
 
 rm(ivPreProcessed)
 gc()
+
+
+###############################################################################
+# chronic processing
+###############################################################################
+chronicPreProcessed <- loadProcessedProj(
+  proj = projChronic,
+  adt = adtChronic,
+  tsaCatalog = tsa_catalog,
+  generateNewUmapSettings = list(
+    "reducedDims" = "Harmony",
+    "name" = "UMAP2",
+    "nNeighbors" = 80,
+    "force" = TRUE,
+    "minDist" = 0.3),
+  generateNewClusterSettings = list(
+    "reducedDims" = "Harmony",
+    "method" = "Seurat",
+    "name" = "Clusters2",
+    "resolution" = 0.5
+  ),
+  runPreAnnot = TRUE,
+  runPreAnnotIsoComps = isoComparisonsChronic,
+  prefixForGraphs = "chronic"
+)
+
+projChronic_matched <- chronicPreProcessed$archrProj
+adtChronic_matched <- chronicPreProcessed$adtSeu
+chronicAdtToUse <- chronicPreProcessed$adtToUse
+
+rm(chronicPreProcessed)
+gc()
+
 
 ###############################################################################
 # art processing
@@ -198,45 +247,64 @@ plotDiscreteLollipop(projInvitro_matched, "inVitro_discreteHivOnly_matched",
   cluster = "manualClusterAnnot",
   graphType = "hivOnly")
 
+
+###############################################################################
+# chronic manual annot
+###############################################################################
+projChronic_matched <- assignManualAnnotation(archrProj = projChronic_matched,
+  cluster = "Clusters2",
+  annotFn = "manualClusterAnnotations/chronic.csv")
+
+adtChronic_matched$manualClusterAnnot <- projChronic_matched$manualClusterAnnot
+adtChronic_matched$haystackOut <- projChronic_matched$haystackOut
+
+plotUmap(projChronic_matched,
+  colorBy = "manualClusterAnnot",
+  fn = "chronic_umap_labeledCluster",
+  embedding = "UMAP2")
+plotUmap(projChronic_matched,
+  colorBy = "Clusters2",
+  colorLabelBy = "Clusters2",
+  fn = "chronic_umap_unannotCluster_withPlotLabels",
+  embedding = "UMAP2",
+  colorScheme = scale_color_manual(values = multiHueColorPalette),
+  propInLegend = TRUE)
+plotUmap(projChronic_matched,
+  fn = "chronic_umap_labeledCluster_withPlotLabels",
+  colorBy = c("Clusters2", "manualClusterAnnot"),
+  colorLabelBy = "Clusters2",
+  embedding = "UMAP2",
+  colorScheme = scale_color_manual(values = multiHueColorPalette),
+  propInLegend = TRUE)
+
+plotDiscreteLollipop(projChronic_matched, "chronic_discreteAbsolute_matched",
+  cluster = "manualClusterAnnot",
+  graphType = "absolute")
+
+plotDiscreteLollipop(projChronic_matched, "chronic_discreteHivOnly_matched",
+  cluster = "manualClusterAnnot",
+  graphType = "hivOnly")
+
+
+plotDiscreteLollipop(projChronic_matched, "chronic_discreteAbsolute_matched_byDonor",
+  donorColumn = "individual",
+  gwidth = 5,
+  gheight = 3.5,
+  cluster = "manualClusterAnnot",
+  graphType = "absolute")
+
+plotDiscreteLollipop(projChronic_matched, "chronic_discreteHivOnly_matched_byDonor",
+  donorColumn = "individual",
+  gwidth = 5,
+  gheight = 3,
+  showAggregate = TRUE,
+  cluster = "manualClusterAnnot",
+  graphType = "hivOnly")
+
+
 ###############################################################################
 # art manual annot
 ###############################################################################
-
-tmp <- loadArchRProject("../asapseq-hiv-art/A08A01B45A09_qcfiltTSS8_matched/")
-
-tmpDf <- data.frame(
-  cbc = projART_matched$cellNames,
-  newAnnot = projART_matched$Clusters2)
-
-tmpDf2 <- data.frame(
-  cbc = tmp$cellNames,
-  oldAnnot = tmp$Clusters2) %>%
-  mutate(cbc = str_replace(cbc, "((A01|A08))_(\\d)", "\\1_post_\\2"))
-
-tmpDf <- tmpDf %>%
-  left_join(tmpDf2, by = "cbc") %>%
-  dplyr::group_by(newAnnot, oldAnnot) %>%
-  dplyr::tally() %>%
-  group_by(newAnnot) %>%
-  mutate(groupSum = sum(n)) %>%
-  mutate(freqOfNew = n / groupSum)
-
-ggplot(tmpDf, aes(x = newAnnot, y = oldAnnot, color = freqOfNew)) +
-  geom_point() +
-  theme_bw() +
-  scale_color_distiller(palette = "YlOrRd", direction = 1)
-
-t(adtART_matched@assays$tsa@data[c("A0034", "A0072", "A0154", "A0386", "A0390"), ]) %>%
-  as.data.frame(.) %>%
-  mutate(x = Cells(adtART_matched),
-    y = adtART_matched$atacClusters) %>%
-  tidyr::pivot_longer(cols = -one_of(c("x", "y")), names_to = "metric", values_to = "val") %>%
-  group_by(metric, y) %>%
-  dplyr::summarize(mean = mean(val)) %>%
-  dplyr::arrange(metric, desc(y)) %>%
-  tidyr::pivot_wider(names_from = "metric", values_from = "mean") %>%
-  View(.)
-
 
 projART_matched <- assignManualAnnotation(archrProj = projART_matched,
   cluster = "Clusters2",
@@ -327,9 +395,9 @@ tmp <- tmp %>%
   group_by(donor) %>%
   mutate(proportion = n / sum(n) * 100)
 
-ggplot(tmp, aes(x = proportion, y = cluster, fill = stage)) +
-  geom_point(alpha = 0.5, color = "#000000", shape = 21, size = 2.75) +
-  scale_y_discrete(limits = rev, drop = FALSE) +
+artProportionPlot <- ggplot(tmp, aes(x = proportion, y = cluster, fill = stage)) +
+  geom_point(alpha = 0.5, color = "#000000", shape = 21, size = 2) +
+  scale_y_discrete(limits = rev, drop = TRUE) +
   facet_wrap(~ individual, nrow = 1) +
   theme_bw() +
   theme(
@@ -347,6 +415,10 @@ ggplot(tmp, aes(x = proportion, y = cluster, fill = stage)) +
     y = "Cluster",
     fill = "Stage")
 
+savePlot(artProportionPlot, fn = "art_cluster_proportions_by_donor",
+  devices = c("png", "rds"),
+  gheight = 3, gwidth = 8)
+
 ###############################################################################
 # iv differential analysis
 ###############################################################################
@@ -358,7 +430,8 @@ invitro_markers <- findHIVDifferentialMarkers(seu = adtInvitro_matched,
   featuresToUse = invitroAdtToUse,
   tsa_catalog = tsa_catalog)
 
-makeDifferentialLollipop(invitro_markers, "invitro_lollipop")
+
+makeDifferentialLollipop2(invitro_markers, "invitro_lollipop2")
 exportTsv(invitro_markers)
 
 invitro_activeLaterCells <- adtInvitro_matched$haystackOut[grepl("CD4 Activated", adtInvitro_matched$manualClusterAnnot) & invitro_tcells_check]
@@ -369,7 +442,8 @@ invitro_activeLate_markers <- findHIVDifferentialMarkers(
   identNeg = names(invitro_activeLaterCells[!invitro_activeLaterCells]),
   featuresToUse = invitroAdtToUse)
 
-makeDifferentialLollipop(invitro_activeLate_markers, "invitro_lollipop_activeLate")
+
+makeDifferentialLollipop2(invitro_activeLate_markers, "invitro_lollipop_activeLate2")
 exportTsv(invitro_activeLate_markers)
 
 invitro_activeLate_markers_forVln <- invitro_activeLate_markers %>%
@@ -393,7 +467,7 @@ invitro_early_markers <- findHIVDifferentialMarkers(
   identNeg = names(invitro_earlyCells[!invitro_earlyCells]),
   featuresToUse = invitroAdtToUse)
 
-makeDifferentialLollipop(invitro_early_markers, "invitro_lollipop_early")
+makeDifferentialLollipop2(invitro_early_markers, "invitro_lollipop_early2")
 exportTsv(invitro_early_markers)
 
 invitroGcPeakFn <- paste0(getOutputDirectory(projInvitro_matched), "_gcPeakCalled")
@@ -476,7 +550,7 @@ invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_acti
   mutate(direction = ifelse(Log2FC > 0, "HIV+", "HIV-")) %>%
   mutate(piScore = Log2FC * -log10(FDR)) %>%
   group_by(direction) %>%
-  arrange(abs(piScore), .by_group = TRUE) %>%
+  dplyr::arrange(abs(piScore), .by_group = TRUE) %>%
   ungroup() %>%
   mutate(symbol2 = case_when(
     inGene != "FALSE" & str_detect(as.character(inGene), nearestTSS) ~ glue("{nearestTSS}* ({nearestTSSDist})"),
@@ -487,11 +561,11 @@ invitro_markerTest_activatedPeaks_topPeaks <- data.frame(invitro_markerTest_acti
 
 exportTsv(invitro_markerTest_activatedPeaks_topPeaks)
 
-iv_topPeaks_g <- ggplot(invitro_markerTest_activatedPeaks_topPeaks %>%
-    filter(FDR < 0.05) %>%
-    group_by(direction) %>%
-    slice_max(order_by = abs(piScore), n = 15),
-  aes(x = -log10(FDR), y = symbol2)) +
+iv_topPeaks_g <- invitro_markerTest_activatedPeaks_topPeaks %>%
+  filter(FDR < 0.05) %>%
+  group_by(direction) %>%
+  slice_max(order_by = abs(piScore), n = 15) %>%
+  ggplot(aes(x = -log10(FDR), y = symbol2)) +
   geom_segment(aes(yend = symbol2, x = 0, xend = -log10(FDR)), linetype = "dashed", color = "#CCCCCC") +
   geom_point(aes(fill = Log2FC), color = "#000000", pch = 21, size = 2) +
   scale_fill_distiller(palette = "RdBu", direction = -1) +
@@ -727,22 +801,186 @@ randomForest::importance(invitroActRF$`RF (all)`, type = "1") %>%
 
 
 ###############################################################################
+# chronic differential analysis
+###############################################################################
+chronic_tcells_check <- !(grepl("(B|APC|CD8)", adtChronic_matched$manualClusterAnnot))
+chronic_tcells <- adtChronic_matched$haystackOut[chronic_tcells_check]
+chronic_markers <- findHIVDifferentialMarkers(seu = adtChronic_matched,
+  identPos = names(chronic_tcells[chronic_tcells]),
+  identNeg = names(chronic_tcells[!chronic_tcells]),
+  featuresToUse = chronicAdtToUse,
+  findMarkerMethod = "DESeq2",
+  tsa_catalog = tsa_catalog)
+
+plotVlnEnhanced(adtChronic_matched, cells = names(chronic_tcells),
+  feats = chronic_markers$gene,
+  separator = chronic_markers$Status,
+  titles = chronic_markers$cleanName,
+  fn = "chronic_tcells_vln")
+
+makeDifferentialLollipop2(chronic_markers, "chronic_lollipop_deseq2")
+exportTsv(chronic_markers)
+
+chronic_tfh_cells <- adtChronic_matched$haystackOut[grepl("(CD4 Tfh)", adtChronic_matched$manualClusterAnnot)]
+chronic_tfh_markers <- findHIVDifferentialMarkers(
+  seu = adtChronic_matched,
+  tsa_catalog = tsa_catalog,
+  identPos = names(chronic_tfh_cells[chronic_tfh_cells]),
+  identNeg = names(chronic_tfh_cells[!chronic_tfh_cells]),
+  findMarkerMethod = "DESeq2",
+  featuresToUse = chronicAdtToUse)
+
+makeDifferentialLollipop(chronic_tfh_markers, "chronic_lollipop_tfh")
+exportTsv(chronic_tfh_markers)
+
+plotVlnEnhanced(adtChronic_matched, cells = names(chronic_tfh_cells),
+  feats = chronic_tfh_markers$gene,
+  separator = chronic_tfh_markers$Status,
+  titles = chronic_tfh_markers$cleanName,
+  fn = "chronic_tfh_vln")
+
+chronicGcPeakFn <- paste0(getOutputDirectory(projChronic_matched), "_gcPeakCalled")
+if (!dir.exists(chronicGcPeakFn)) {
+  chronic_renamingDF <- getCellColData(projChronic_matched, select = c("haystackOut", "manualClusterAnnot")) %>%
+    as.data.frame(.) %>%
+    mutate(cellNames = projChronic_matched$cellNames) %>%
+    mutate(condensedCluster = case_when(
+      grepl("^CD4", manualClusterAnnot) ~ "CD4",
+      TRUE ~ "Other")) %>%
+    mutate(condensedHIVCluster = paste0(condensedCluster, "_", haystackOut))
+  
+  projChronic_matched <- addCellColData(ArchRProj = projChronic_matched,
+    data = chronic_renamingDF$condensedHIVCluster,
+    cells = chronic_renamingDF$cellNames,
+    name = "condensedHivCluster",
+    force = TRUE)
+  
+  projChronic_matched <- addGroupCoverages(ArchRProj = projChronic_matched,
+    groupBy = "condensedHivCluster",
+    minReplicates = 2,
+    minCells = 24,
+    sampleRatio = 0.95,
+    force = TRUE)
+  
+  projChronic_matched <- addReproduciblePeakSet(
+    ArchRProj = projChronic_matched,
+    groupBy = "condensedHivCluster", 
+    pathToMacs2 = "/home/wuv/anaconda3/envs/asapseq/bin/macs2",
+    force = TRUE)
+  
+  projChronic_matched <- addPeakMatrix(projChronic_matched, force = TRUE)
+  
+  if("Motif" %ni% names(projChronic_matched@peakAnnotation)) {
+    projChronic_matched <- addMotifAnnotations(ArchRProj = projChronic_matched,
+      motifSet = "cisbp", name = "Motif", force = TRUE)
+  }
+  
+  projChronic_matched <- addBgdPeaks(projChronic_matched, force = TRUE)
+  
+  projChronic_matched <- addDeviationsMatrix(
+    ArchRProj = projChronic_matched, 
+    peakAnnotation = "Motif",
+    force = TRUE
+  )
+  
+  projChronic_matched_gcPeak <- saveArchRProject(projChronic_matched,
+    outputDirectory = chronicGcPeakFn, load = TRUE)
+} else {
+  projChronic_matched_gcPeak <- loadArchRProject(chronicGcPeakFn, force = TRUE, showLogo = FALSE)
+}
+
+
+chronic_markerTest <- getMarkerFeatures(
+  ArchRProj = projChronic_matched_gcPeak, 
+  useMatrix = "PeakMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "CD4_TRUE",
+  bgdGroups = "CD4_FALSE",
+  maxCells = 1000,
+  verbose = FALSE
+)
+plotVolcanoFromGetMarkerFeatures(chronic_markerTest,
+  fn = "chronic_peaks_volcano")
+
+chronic_markerTest_chromvar <- getMarkerFeatures(
+  ArchRProj = projChronic_matched_gcPeak,
+  useMatrix = "MotifMatrix",
+  groupBy = "condensedHivCluster",
+  testMethod = "wilcoxon",
+  bias = c("TSSEnrichment", "log10(nFrags)"),
+  useGroups = "CD4_TRUE",
+  bgdGroups = "CD4_FALSE",
+  maxCells = 1000,
+  verbose = TRUE,
+  useSeqnames = "z"
+)
+
+plotVolcanoFromGetMarkerFeatures(chronic_markerTest_chromvar, chromVARmode = TRUE,
+  fn = "chronic_volcano_motifs_chromVAR")
+
+plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVneg", direction = "negative")
+plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVpos", direction = "positive")
+
+
+###############################################################################
+# chronic model analysis
+###############################################################################
+chronicModelData <- getAssayData(adtChronic_matched, names(chronic_tcells), chronicAdtToUse, splitRatio = 0.7)
+chronicLR <- calcLogisticalRegression(chronicModelData[["train"]])
+chronicNB <- calcNaiveBayes(chronicModelData[["train"]])
+chronicRF <- calcRandomForest(chronicModelData[["train"]],
+  sampleProps = list(c(NULL, NULL), c(5, 1), c(10, 1)))
+
+chronicRFPred <- lapply(chronicRF, function(x) {
+  pred <- getClassifierPrediction(predict(x, chronicModelData[["test"]], type = "prob")[, 2],
+    chronicModelData[["test"]]$haystackOut)
+  
+  return(pred)
+})
+names(chronicRFPred) <- names(chronicRF)
+
+chronicModelsPred <- list(
+  "logistic" = getClassifierPrediction(predict(chronicLR, chronicModelData[["test"]], type = 'response'),
+    chronicModelData[["test"]]$haystackOut),
+  "naive bayes" = getClassifierPrediction(predict(chronicNB, chronicModelData[["test"]], type = "prob")[, 2],
+    chronicModelData[["test"]]$haystackOut)
+)
+
+chronicModelsPred <- base::append(chronicModelsPred, chronicRFPred)
+chronicModelsROC <- lapply(chronicModelsPred, getClassifierPerformance)
+chronicModelsAUC <- lapply(chronicModelsPred, getClassifierPerformance, perfMode = "auc")
+
+plotGgRoc(chronicModelsROC, chronicModelsAUC, "chronic_models")
+plotLogitRegressionVolcano(chronicLR, tsa_catalog, chronicAdtToUse, "chronic_logitRegression_volcano")
+
+randomForest::importance(chronicRF$`RF (all)`, type = "1") %>% 
+  as.data.frame(.) %>% 
+  dplyr::arrange(desc(MeanDecreaseAccuracy)) %>%
+  mutate(DNA_ID = rownames(.)) %>%
+  left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID") %>%
+  head(n = 10)
+
+
+
+###############################################################################
 # art differential analysis
 ###############################################################################
 art_tcells_check <- (grepl("CD4", adtART_matched$manualClusterAnnot))
 art_tcells <- adtART_matched$haystackOut[art_tcells_check]
-art_markersLR <- findHIVDifferentialMarkers(
-  seu = adtART_matched,
-  identPos = names(art_tcells[art_tcells]),
-  identNeg = names(art_tcells[!art_tcells]),
-  featuresToUse = ARTAdtToUse,
-  findMarkerMethod = "LR",
-  logfc.threshold = 0.1,
-  tsa_catalog = tsa_catalog,
-  latent.vars = c("individual", "manualClusterAnnot"))
-
-makeDifferentialLollipop(art_markersLR, "art_lollipop_LR")
-exportTsv(art_markersLR)
+# art_markersLR <- findHIVDifferentialMarkers(
+#   seu = adtART_matched,
+#   identPos = names(art_tcells[art_tcells]),
+#   identNeg = names(art_tcells[!art_tcells]),
+#   featuresToUse = ARTAdtToUse,
+#   findMarkerMethod = "LR",
+#   logfc.threshold = 0.1,
+#   tsa_catalog = tsa_catalog,
+#   latent.vars = c("individual", "manualClusterAnnot"))
+# 
+# makeDifferentialLollipop2(art_markersLR, "art_lollipop_LR")
+# exportTsv(art_markersLR)
 
 art_markersDEseq2 <- findHIVDifferentialMarkers(
   seu = adtART_matched,
@@ -753,7 +991,7 @@ art_markersDEseq2 <- findHIVDifferentialMarkers(
   logfc.threshold = 0.1,
   tsa_catalog = tsa_catalog)
 
-makeDifferentialLollipop(art_markersDEseq2, "art_lollipop_deseq2")
+makeDifferentialLollipop2(art_markersDEseq2, "art_lollipop_deseq2")
 exportTsv(art_markersDEseq2)
 
 art_markersWilcox <- findHIVDifferentialMarkers(
@@ -765,7 +1003,7 @@ art_markersWilcox <- findHIVDifferentialMarkers(
   findMarkerMethod = "wilcox",
   tsa_catalog = tsa_catalog)
 
-makeDifferentialLollipop(art_markersWilcox, "art_lollipop_wilcox")
+makeDifferentialLollipop2(art_markersWilcox, "art_lollipop_wilcox")
 exportTsv(art_markersWilcox)
 
 
@@ -966,7 +1204,6 @@ artLess_markerTest_tcmttm_deviations <- getMarkerFeatures(
 plotEnhancedMotifDot(
   markerFeatures = artLess_markerTest_tcmttm_deviations,
   fn = "art_chromVAR_tcmttm_motifsUp_HIVpos_enhanced",
-  devices = "svg",
   preFilter = "meandiff > 0",
   xVar = "motif",
   yVar = "fdr",
@@ -1013,7 +1250,7 @@ art_tcmttm_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
   logfc.threshold = 0.1,
   tsa_catalog = tsa_catalog)
 
-makeDifferentialLollipop(art_tcmttm_markers, "art_tcmttm_markers")
+makeDifferentialLollipop2(art_tcmttm_markers, "art_tcmttm_markers")
 exportTsv(art_tcmttm_markers)
 
 art_tem_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
@@ -1024,7 +1261,7 @@ art_tem_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
   logfc.threshold = 0.1,
   tsa_catalog = tsa_catalog)
 
-makeDifferentialLollipop(art_tem_markers, "art_tem_markers")
+makeDifferentialLollipop2(art_tem_markers, "art_tem_markers")
 exportTsv(art_tem_markers)
 
 # art_mait_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
@@ -1046,11 +1283,17 @@ plotUpsetCBC(atacCBC = projInVitro$cellNames,
   adtCBC = Cells(adtInVitro),
   fn = "invitro_upset_cbc")
 
+plotUpsetCBC(atacCBC = projChronic$cellNames,
+  hivCBC = unique(haystackChronic$allViralFrags$newCbc),
+  adtCBC = Cells(adtChronic),
+  separateByIndividual = TRUE,
+  fn = "chronic_upset_cbc")
+
 plotUpsetCBC(atacCBC = projART$cellNames,
   hivCBC = unique(haystackART$allViralFrags$newCbc),
   adtCBC = Cells(adtART),
   separateByIndividual = TRUE,
-  gheight = 4,
+  gheight = 5,
   fn = "art_upset_cbc")
 
 calculateLTRVersusInternal <- function(frags, ltr5End, ltr3Start, ltr3End) {
@@ -1081,6 +1324,17 @@ calculateLTRVersusInternal(inVitroFrags_matched, 632, 9093, 9725)
 hxb2GeneAnnots <- read.csv("viralGenomeAnnotations/hxb2.csv") %>%
   mutate(annotation = factor(annotation, levels = rev(unique(annotation)))) %>%
   mutate(annotation2 = ifelse(annotation == "LTR", paste0(annotation, row_number()), annotation))
+
+chronicFrags_matched <- haystackChronic$filteredviralFrags[haystackChronic$filteredviralFrags$newCbc %in% projChronic_matched$cellNames, ] %>%
+  mutate(individual = ifelse(grepl("C01", sample), "C01", "C02"))
+
+plotFragMultiGraph(frags = chronicFrags_matched,
+  coverage = rep(0, 9719),
+  geneAnnots = hxb2GeneAnnots,
+  separateByIndividual = TRUE,
+  fn = "chronic_frags",
+  gheight = 6)
+calculateLTRVersusInternal(chronicFrags_matched, 633, 9085, 9718)
 
 artFrags_matched <- haystackART$filteredviralFrags[haystackART$filteredviralFrags$newCbc %in% projART_matched$cellNames, ]
 artFrags_matched <- artFrags_matched %>%

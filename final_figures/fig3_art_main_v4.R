@@ -3,7 +3,8 @@ source("defaultFigureSettings.R")
 figA <- readRDS("../outs/rds/art_umap_labeledCluster_withPlotLabels.rds")
 figB <- readRDS("../outs/rds/art_umap_haystackout.rds")
 figC <- readRDS("../outs/rds/art_discreteAbsolute_matched_byDonor.rds")
-figD <- readRDS("../outs/rds/art_discreteHivOnly_matched_byDonor.rds")
+figD <- readRDS("../outs/rds/art_cluster_proportions_by_donor.rds")
+# figD <- readRDS("../outs/rds/art_discreteHivOnly_matched_byDonor.rds")
 
 a_legend <- as_ggplot(get_legend(figA + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), nrow = 11,
@@ -46,23 +47,33 @@ figB <- figB + umapPlotThemeNoLeg +
 
 figAB <- figA + figB + plot_annotation(tag_levels = "a")
 
+figD <- figD + subplotTheme +
+  theme(
+    strip.background = element_rect(color = NA, fill = "transparent"),
+    legend.position = "bottom",
+    legend.margin = margin(t = -10),
+    plot.margin = margin(t = -20, l = 4, r = 20),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 5, angle = 45, hjust = 1),
+    axis.title.y = element_blank(),
+    panel.background = element_rect(colour = "black", fill = NA, size = 1)
+    # axis.line = element_line(colour = "black", size = rel(1))
+  )
+
 layout <- c(
   area(1, 1, 2, 4), #ab
   area(1, 5, 3, 9), #legend
   area(3, 1, 5, 9), #c
   area(6, 1, 7, 9)
-  # area(6, 1, 7, 4), #d
-  # area(6, 5, 7, 7), #e
-  # area(6, 8, 7, 9) #f
 )
 
 discreteLollipopTheme <- subplotTheme + theme(
   axis.title.y = element_blank(),
   axis.title.x = element_blank(),
-  axis.text.x = element_text(size = 5),
+  axis.text.x = element_text(size = 6),
   plot.subtitle = element_text(size = 7, hjust = 0.5, margin = margin(b = -1)),
   plot.title.position = "panel",
-  plot.margin = margin(l = -20, t = -20, r = 20)
+  plot.margin = margin(l = -30, t = -20, r = 20)
 )
 
 decreasePointAndText <- function(x) {
@@ -84,23 +95,12 @@ figC <- wrap_plots(figC, nrow = 1) &
     expand = expansion(mult = c(0, 0.05)), limits = c(0, NA)),
     discreteLollipopTheme))
 
-figD <- lapply(figD, decreasePointAndText)
-for (i in c(2:length(figD))) {
-  figD[[i]] <- figD[[i]] + theme(axis.text.y = element_blank())
-}
-figD[[1]] <- figD[[1]] + theme(axis.text.y = element_text(angle = 45, hjust = 1, size = 5))
-
-figD <- wrap_plots(figD, nrow = 1) & discreteLollipopTheme
-# figD[[4]] <- figD[[4]] + plot_layout(tag_level = "new")
 
 p <- wrap_elements(full = figAB, ignore_tag = TRUE) +
   wrap_elements(panel = figABLegend, ignore_tag = TRUE, clip = FALSE) +
-  figC +
-  (figD + theme(plot.margin = margin(t = 5))) +
-  # (wrap_plots(figD[c(1:3)]) & discreteLollipopTheme) +
-  # (wrap_plots(figD[c(4:5)]) & discreteLollipopTheme) +
-  # (wrap_plots(figD[c(6)]) & discreteLollipopTheme) +
-  plot_annotation(tag_levels = list(c("c", "", "", "", "", "d", "", "", "e", "", "f"))) +
+  wrap_elements(figC) +
+  wrap_elements(figD) +
+  plot_annotation(tag_levels = list(c("c", "d"))) +
   plot_layout(design = layout)
 
 saveFinalFigure(plot = p, fn = "fig3_art", devices = c("png", "pdf"), gwidth = 8.2, gheight = 9)

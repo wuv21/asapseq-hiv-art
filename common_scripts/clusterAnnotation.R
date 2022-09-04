@@ -36,13 +36,17 @@ getBaseATACPanel <- function(
       labs(title = baseGenes[i]) + 
       theme(
         axis.title = element_blank(),
-        plot.title = element_text(size = 8, margin = margin(5, 0, 0, 0)),
-        legend.margin = margin(5,0,5,0),
-        legend.box.margin = margin(-10,-10,-5,-10),
-        legend.text = element_text(size = 5),
-        legend.title = element_text(size = 5),
+        plot.title = element_text(size = 8, margin = margin(7, 0, 0, 0)),
+        legend.margin = margin(0,0,0,0),
+        legend.box.margin = margin(-10,5,0,-15),
+        legend.box.spacing = unit(0, "pt"),
+        legend.text = element_text(size = 5, margin = margin(t = -5)),
+        legend.title = element_blank(),
         legend.key.size = unit(0.6, "lines"),
-        plot.margin = unit(c(0,0,0,0), "pt"))
+        legend.key.width = unit(1, "lines"),
+        legend.position = "top",
+        legend.justification = "right",
+        plot.margin = unit(c(0,0,5,0), "pt"))
     
     return(g)
   })

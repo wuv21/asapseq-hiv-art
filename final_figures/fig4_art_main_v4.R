@@ -1,5 +1,5 @@
 source("defaultFigureSettings.R")
-library(ComplexHeatmap)
+suppressMessages(library(ComplexHeatmap))
 
 figA <- readRDS("../outs/rds/art_lollipop_deseq2.rds")
 figB <- readRDS("../outs/rds/art_lollipop_wilcox.rds")
@@ -11,35 +11,42 @@ figF <- readRDS("../outs/rds/art_chromVAR_tcmttm_motifsUp_HIVpos_enhanced.rds")
 
 titleTheme <- subplotTheme + theme(
   plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
-  axis.text = element_text(size = 6))
+  axis.text = element_text(size = 6),
+  strip.background = element_rect(fill = "transparent", colour = NA_character_),
+  strip.text = element_text(size = 8, color = "#000000"),
+  panel.background = element_rect(fill = "transparent", colour = NA_character_),
+  plot.background = element_rect(fill = "transparent", colour = NA_character_),
+  axis.title.y = element_blank(),
+  legend.text = element_text(margin = margin(-8)),
+  plot.margin = margin(b = 10))
 
 figA <- figA + labs(title = "All T cells (DESeq2)") + titleTheme
 figB <- figB + labs(title = "All T cells (Wilcoxon)") + titleTheme
-figC <- figC + labs(title = "Tcm/Ttm (DESeq2)") + titleTheme
+figC <- figC + labs(title = "Tcm/Ttm (DESeq2)") + titleTheme 
 figD <- figD + labs(title = "Tem (DESeq2)") + titleTheme
 
 figF <- figF + subplotTheme +
   labs(
-    title = "Tcm/Ttm HIV+ Enriched Motifs",
+    x = "chromVAR motif",
     color = "Mean\ndifference",
-    y = "FDR") +
-  titleTheme +
-  theme(plot.subtitle = element_blank(),
+    y = "-log10(FDR)") +
+  theme(
+    plot.subtitle = element_blank(),
+    plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
+    axis.text = element_text(size = 6),
     axis.title.y = element_text(size = 6),
     legend.title = element_text(size = 6),
     legend.text = element_text(size = 6),
+    plot.margin = margin(t = 10, r = 15),
     legend.key.size = unit(0.5, 'line'),
-    plot.margin = margin(r = 5, unit = "line"))
+    legend.key.height = unit(0.4, 'line'))
 
-# figD <- ggplotGrob(figD)
-# for(i in which(grepl("strip-r", figD$layout$name))){
-#   figD$grobs[[i]]$layout$clip <- "off"
-# }
+
 
 set.seed(21)
 figE <- ComplexHeatmap::Heatmap(
   matrix = figERds,
-  name = "Mean z deviation",
+  name = "Mean z\ndeviation",
   border = FALSE,
   cluster_rows = TRUE,
   show_row_names = FALSE,
@@ -102,26 +109,33 @@ figE <- ComplexHeatmap::Heatmap(
 )
 
 layout <- c(
-  area(1, 1, 4, 2), #a
-  area(1, 3, 3, 4), #b
-  area(5, 1, 6, 2), #c
-  area(4, 3, 7, 4),  #d
-  area(1, 5, 8, 12),  #e
-  area(7, 1, 8, 3)  #f
+  area(1, 1, 5, 2), #a
+  area(6, 1, 7, 2), #C
+  area(1, 3, 4, 4), #B
+  area(5, 3, 7, 4), #D
+  area(1, 5, 9, 12), #e
+  area(8, 1, 9, 5)  #f
 )
 
-p <- figA + figB + figC + figD +
-  # wrap_elements(figB) +
-  # wrap_elements(figC) +
-  # wrap_elements(figD) +
-  wrap_elements(grid.grabExpr(draw(figE, heatmap_legend_side = "bottom",
-    annotation_legend_side = "bottom",
-    merge_legend = TRUE))) +
+p <- figA + 
+  figB + 
+  figC +
+  figD +
+  wrap_elements(
+    grid.grabExpr(
+      draw(figE,
+        heatmap_legend_side = "bottom",
+        annotation_legend_side = "bottom",
+        merge_legend = TRUE))) +
   wrap_elements(plot = figF) +
   plot_annotation(tag_levels = list(c(letters[1:7]))) +
   plot_layout(design = layout)
 
-saveFinalFigure(plot = p, fn = "fig4_art", devices = c("png", "pdf"), gwidth = 8.25, gheight = 7)
+# p <- patchworkGrob(p)
+p <- unclipStripText(p)
+saveRDS(p, "fig4.rds")
 
-warnings()
+saveFinalFigure(plot = p, fn = "fig4_art", devices = c("png", "pdf"), gwidth = 8.25, gheight = 9)
+
+# warnings()
 

@@ -4,7 +4,7 @@ figA <- readRDS("../outs/rds/InVitro_umap_labeledCluster_withPlotLabels.rds")
 figB <- readRDS("../outs/rds/invitro_umap_haystackout.rds")
 figC <- readRDS("../outs/rds/inVitro_discreteAbsolute_matched.rds")
 figD <- readRDS("../outs/rds/inVitro_discreteHivOnly_matched.rds")
-figE <- readRDS("../outs/rds/invitro_lollipop_activeLate.rds")
+figE <- readRDS("../outs/rds/invitro_lollipop_activeLate2.rds")
 
 a_legend <- as_ggplot(get_legend(figA + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 2,
@@ -42,6 +42,17 @@ figB <- figB + umapPlotThemeNoLeg +
 figAB <- figA + figB + plot_annotation(tag_levels = "a")
 figAB[[2]] <- figAB[[2]] + plot_layout(tag_level = "keep")
 
+figE <- figE +
+  subplotTheme + theme(
+    plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
+    axis.text = element_text(size = 6),
+    strip.background = element_rect(fill = "transparent", colour = NA_character_),
+    strip.text = element_text(size = 8, color = "#000000"),
+    panel.background = element_rect(fill = "transparent", colour = NA_character_),
+    plot.background = element_rect(fill = "transparent", colour = NA_character_),
+    axis.title.y = element_blank(),
+    legend.text = element_text(margin = margin(-8)),
+    plot.margin = margin(b = 10))
 
 figABLegend <- (
   a_legend + 
@@ -65,7 +76,7 @@ p <- wrap_elements(full = figAB, ignore_tag = TRUE) +
   wrap_elements(figABLegend, ignore_tag = TRUE) + 
   wrap_elements(figC + subplotTheme) +
   wrap_elements(figD + subplotTheme + theme(plot.margin = unit(c(0, 0, 0, 10), "pt"))) +
-  wrap_elements(figE + subplotTheme + theme(plot.margin = unit(c(-20, 0, 0, 0), "pt"))) +
+  wrap_elements(figE) +
   plot_annotation(tag_levels = list(c(letters[3:5]))) +
   plot_layout(design = layout)
 
