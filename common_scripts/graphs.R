@@ -777,7 +777,9 @@ plotEnhancedMotifDot <- function(
   devices = c("png", "rds"),
   alphaByPVal = NULL,
   pValMax = 0.05,
-  showTopNByPVal = NULL
+  showTopNByPVal = NULL,
+  palette = "YlOrRd",
+  paletteDirection = 1
 ) {
   
   .xVar <- rlang::parse_expr(xVar)
@@ -814,7 +816,7 @@ plotEnhancedMotifDot <- function(
     geom_point(aes(color = !!.colorVar)) +
     theme_classic() +
     coord_cartesian(clip = "off") +
-    scale_color_distiller(palette = "YlOrRd", direction = 1) +
+    scale_color_distiller(palette = palette, direction = paletteDirection) +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
       axis.text = element_text(size = BASEPTFONTSIZE, color = "#000000"),
@@ -852,9 +854,12 @@ plotMotifDot <- function(
     meandiff = assays(markerFeatures)$MeanDiff[, 1],
     motif = elementMetadata(markerFeatures)$name)
   
+  # TODO change to colorByMeanDiff...
+  
+  # add fill....
   if (direction == "negative") {
     df <- filter(df, meandiff < 0)
-    pointColor  <- HIVNEGCOLOR
+    pointColor <- HIVNEGCOLOR
     
   } else {
     df <- filter(df, meandiff > 0)
@@ -1190,89 +1195,34 @@ plotFragMultiGraph <- function(
   return(tmpG)
 }
 
-plogFragMultiAnnotGraph <- function(
-  frags,
+plotFragByAnnot <- function(
   fragsAnnot,
-  allAnnotLevels,
   fn,
   devices = c("png", "rds"),
-  gwidth = 6,
-  gheight = NULL) {
+  gwidth = 8,
+  gheight = 1) {
   
-  df <- frags %>%
-    mutate(seqname = gsub("(chrA01_|chrA08|chrA09_|chr|chrA01\\.)", "", seqname)) %>%
-    group_by(readname) %>%
-    mutate(readNum = seq_along(sample)) %>%
-    mutate(readNumIndividual = paste0(individual, " R#", readNum)) %>%
-    ungroup()
-
-  dfForAnnot <- df %>%
-    left_join(fragsAnnot, by = "id") %>%
-    mutate(annot = factor(annot, levels = allAnnotLevels))
-
-  gTheme <- theme(
-    axis.text.y = element_blank(),
-    strip.background = element_blank(),
-    axis.line.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    legend.title = element_blank(),
-    legend.box.spacing = margin(0,0,0,0),
-    legend.margin = margin(0,0,0,0),
-    legend.position = "bottom",
-    text = element_text(family = "Arial", size = BASEPTFONTSIZE),
-    axis.text = element_text(size = 5),
-    axis.title = element_blank(),
-    panel.background = element_blank(),
-    plot.margin = margin(0, -0.1, 0, -0.1, unit = "line"),
-    panel.grid.major.y = element_line(color = "#EFEFEF"))
-  
-  annotG <- dfForAnnot %>%
-    ggplot(aes(y = cbc, x = annot, color = 1)) +
-    geom_point(size = 0.6) +
-    scale_x_discrete(drop = FALSE) +
-    # scale_color_discrete(guide = guide_legend(override.aes = list(alpha = 0), nrow = 2)) +
-    theme_classic() +
-    gTheme +
+  g <- ggplot(fragsAnnot, aes(x = xVar, y = annot, fill = individual)) +
+    geom_tile() +
+    scale_y_discrete(limits = rev, drop = FALSE) +
+    theme_bw() +
+    labs(
+      x = "Cell",
+      y = "Annotation"
+    ) +
+    # coord_equal() +
+    facet_grid(~ individual, scales = "free_x", space = "free") +
     theme(
-      panel.border = element_rect(fill = NA, colour = "black"),
-      legend.text = element_text(color = "transparent"),
-      axis.ticks.x = element_line(color = "#FFFFFF00"),
+      strip.background = element_rect(fill = "transparent", color = NA),
       legend.position = "none",
-      legend.background = element_rect(fill = "transparent", colour = NA),
-      legend.direction = "horizontal",
-      strip.text.y = element_blank()) +
-    lemon::facet_rep_wrap(~ seqname, scales = "free_y", ncol = 1, strip.position = "left")
+      axis.title = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      text = element_text(family = "Arial", size = BASEPTFONTSIZE),
+      legend.key.size = unit(5, "pt"),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank()
+    )
   
-  regionG <- df %>%
-    ggplot(aes(y = cbc, yend = cbc, x = startBp, xend = endBp, color = readNumIndividual)) +
-    geom_segment(alpha = 0.7) +
-    theme_classic() +
-    gTheme +
-    theme(
-      panel.border = element_rect(fill = NA, colour = "black"),
-      strip.background = element_rect(fill = NA, colour = NA),
-      strip.text.y.left = element_text(angle = 0),
-      legend.position = "left",
-      legend.direction = "vertical") +
-    lemon::facet_rep_wrap(~ seqname, scales = "free", ncol = 1, strip.position = "left")
-  
-  tmpN <- df %>%
-    ungroup() %>%
-    dplyr::group_by(seqname) %>%
-    dplyr::summarise(count = length(unique(cbc)))
-    
-  regionG <- .spaceFacetRelative(regionG, tmpN$count)
-  annotG <- .spaceFacetRelative(annotG, tmpN$count)
-  
-  # TODO take legend and make it separate to add to the bottom spanning both columns...
-  
-  combG <- wrap_elements(regionG) + wrap_elements(annotG) + plot_layout(widths = c(3.75,1.5))
-  
-  if (is.null(gheight)) {
-    gheight <- 2 + sum(tmpN$count) * 0.1
-  }
-  
-  savePlot(combG, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
+  savePlot(g, fn = fn, devices = devices, gheight = gheight, gwidth = gwidth)
 }
 
 plotArchRQCData <- function(

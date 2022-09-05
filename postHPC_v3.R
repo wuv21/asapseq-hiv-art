@@ -830,7 +830,7 @@ chronic_tfh_markers <- findHIVDifferentialMarkers(
   findMarkerMethod = "DESeq2",
   featuresToUse = chronicAdtToUse)
 
-makeDifferentialLollipop(chronic_tfh_markers, "chronic_lollipop_tfh")
+makeDifferentialLollipop2(chronic_tfh_markers, "chronic_lollipop_tfh")
 exportTsv(chronic_tfh_markers)
 
 plotVlnEnhanced(adtChronic_matched, cells = names(chronic_tfh_cells),
@@ -920,8 +920,32 @@ chronic_markerTest_chromvar <- getMarkerFeatures(
 plotVolcanoFromGetMarkerFeatures(chronic_markerTest_chromvar, chromVARmode = TRUE,
   fn = "chronic_volcano_motifs_chromVAR")
 
-plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVneg", direction = "negative")
-plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVpos", direction = "positive")
+# plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVneg", direction = "negative")
+# plotMotifDot(chronic_markerTest_chromvar, "chronic_chromVAR_motifsUp_HIVpos", direction = "positive")
+
+plotEnhancedMotifDot(
+  markerFeatures = chronic_markerTest_chromvar,
+  fn = "chronic_chromVAR_motifsUp_HIVneg_enhanced",
+  preFilter = "meandiff < 0",
+  xVar = "motif",
+  yVar = "fdr",
+  subtitle = "HIV-",
+  colorVar = "meandiff",
+  palette = "YlGnBu",
+  paletteDirection = -1,
+  showTopNByPVal = 20
+)
+
+plotEnhancedMotifDot(
+  markerFeatures = chronic_markerTest_chromvar,
+  fn = "chronic_chromVAR_motifsUp_HIVpos_enhanced",
+  preFilter = "meandiff > 0",
+  xVar = "motif",
+  yVar = "fdr",
+  subtitle = "HIV+",
+  colorVar = "meandiff",
+  showTopNByPVal = 20
+)
 
 
 ###############################################################################
@@ -1196,10 +1220,6 @@ artLess_markerTest_tcmttm_deviations <- getMarkerFeatures(
   verbose = FALSE,
   useSeqnames = "z",
 )
-# plotMotifDot(artLess_markerTest_tcmttm_deviations,
-#   "art_chromVAR_tcmttm_motifsUp_HIVneg", direction = "negative", pValMax = 0.05, showTopNByPVal = 15, alphaBySig = TRUE)
-# plotMotifDot(artLess_markerTest_tcmttm_deviations,
-#   "art_chromVAR_tcmttm_motifsUp_HIVpos", direction = "positive", pValMax = 0.05, showTopNByPVal = 15, alphaBySig = TRUE)
 
 plotEnhancedMotifDot(
   markerFeatures = artLess_markerTest_tcmttm_deviations,
@@ -1222,22 +1242,6 @@ plotEnhancedMotifDot(
   colorVar = "meandiff",
   showTopNByPVal = 15
 )
-
-# artLess_markerTest_mait_deviations <- getMarkerFeatures(
-#   ArchRProj = projART_matchedLess_subset_gcPeak, 
-#   useMatrix = "MotifMatrix",
-#   useGroups = "MAIT_TRUE",
-#   bgdGroups = "MAIT_FALSE",
-#   closest = FALSE,
-#   groupBy = "lessCondensedHivClust",
-#   bias = c("TSSEnrichment", "log10(nFrags)"),
-#   verbose = FALSE,
-#   useSeqnames = "z",
-# )
-# plotMotifDot(artLess_markerTest_mait_deviations,
-#   "art_chromVAR_mait_motifsUp_HIVneg", direction = "negative", pValMax = 0.05, showTopNByPVal = 10)
-# plotMotifDot(artLess_markerTest_mait_deviations,
-#   "art_chromVAR_mait_motifsUp_HIVpos", direction = "positive", pValMax = 0.05, showTopNByPVal = 10)
 
 # adt analysis on the less condensed cluster form
 adtART_matched$lessCondensedHivClust <- projART_matched$lessCondensedHivClust
@@ -1339,7 +1343,14 @@ calculateLTRVersusInternal(chronicFrags_matched, 633, 9085, 9718)
 artFrags_matched <- haystackART$filteredviralFrags[haystackART$filteredviralFrags$newCbc %in% projART_matched$cellNames, ]
 artFrags_matched <- artFrags_matched %>%
   mutate(id = paste0(sample, cbc, seqname, startBp, endBp, readname, sep = "")) %>%
-  mutate(individual = str_match(sample, "(.*)(?=_.*$)")[, 1])
+  mutate(individual = str_match(sample, "(.*)(?=_.*$)")[, 1]) %>%
+  ungroup() %>%
+  group_by(readname) %>%
+  mutate(readNum = seq_along(sample)) %>%
+  mutate(readNumIndividual = paste0(individual, " R#", readNum)) %>%
+  mutate(id = paste0(id, "_", readNum)) %>%
+  ungroup()
+  
 
 checkFragmentOverlap <- function(q1, q2, s1, s2) {
   if (q1 <= s2 & q1 >= s1) {
@@ -1364,7 +1375,7 @@ artConsensusAnnots <- read.csv("viralGenomeAnnotations/GeneCutterParser_GeneCutt
 names(artConsensusAnnots) <- sapply(artConsensusAnnots, function(x) {return(x[1, "genome"])})
 
 artFrags_matchedWithAnnot <- lapply(seq_along(artFrags_matched$sample), function(i) {
-  seqname <- artFrags_matched[i, "seqname"]
+  seqname <- as.character(artFrags_matched[i, "seqname"])
   seqnameAnnots <- artConsensusAnnots[[seqname]]
   
   if (is.null(seqnameAnnots)) {
@@ -1374,12 +1385,14 @@ artFrags_matchedWithAnnot <- lapply(seq_along(artFrags_matched$sample), function
   q1 <- artFrags_matched[i, "startBp"]
   q2 <- artFrags_matched[i, "endBp"]
   
-  id <- paste(artFrags_matched[i, "sample"],
+  id <- paste0(artFrags_matched[i, "sample"],
     artFrags_matched[i, "cbc"],
     artFrags_matched[i, "seqname"],
     artFrags_matched[i, "startBp"],
     artFrags_matched[i, "endBp"],
-    artFrags_matched[i, "readname"], sep = "")
+    artFrags_matched[i, "readname"],
+    "_",
+    artFrags_matched[i, "readNum"])
   
   matches <- lapply(seq_along(seqnameAnnots$annotation), function(i) {
     s1 <- seqnameAnnots$startPos[i]
@@ -1399,166 +1412,11 @@ artFrags_matchedWithAnnot <- lapply(seq_along(artFrags_matched$sample), function
 
 
 artFrags_matchedWithAnnot <- bind_rows(artFrags_matchedWithAnnot)
-plogFragMultiAnnotGraph(artFrags_matched, artFrags_matchedWithAnnot, unique(hxb2GeneAnnots$annotation), fn = "art_frags2")
+artAnnotDf <- artFrags_matched %>%
+  left_join(artFrags_matchedWithAnnot, by = "id") %>%
+  mutate(annot = factor(annot, levels = unique(hxb2GeneAnnots$annotation))) %>%
+  dplyr::arrange(individual) %>%
+  mutate(xVar = paste0(sample, cbc)) %>%
+  mutate(xVar = factor(xVar, levels = unique(xVar)))
 
-uniqArtSamples <- unique(artFrags_matched$individual)
-for (smpl in uniqArtSamples) {
-  plogFragMultiAnnotGraph(
-    artFrags_matched %>% filter(individual == smpl),
-    artFrags_matchedWithAnnot,
-    unique(hxb2GeneAnnots$annotation),
-    fn = paste0("art_frags2_", smpl))
-  
-}
-
-makeFancyUpsetPlotHIV(
-  seu = adtInvitro_matched,
-  cellsOfInterest = names(invitro_activeLaterCells),
-  featuresOfInterest = c("A0141", "A0870", "A0367", "A0147", "A0390"),
-  featuresOfInterestNames = c("CCR5", "SLAM", "CD2", "CD62L", "CD127"),
-  metadata = ifelse(invitro_activeLaterCells, "HIV+", "HIV-"),
-  thresholds = c(1.25, 1.25, 1.25, 2.75, 1.5),
-  fn = "invitro_fancyUpset_activatedLaterCells"
-)
-
-save.image()
-
-salantesData <- data.frame(
-  sample = c("A09_pre", "A09_post", "A01", "A08"),
-  iupm = c(0.614, 1.237, 8.35, 0.141),
-  total_dna = c(1208.3, 1221.8, 293.8, 1564.5),
-  rna = c(10834.7, 7203.2, 754.1, 4528.3)
-)
-
-rownames(salantesData) <- salantesData$sample
-
-data.frame(table(projART_matched$individual, projART_matched$haystackOut)) %>%
-  as_tibble() %>%
-  dplyr::rename(sample = Var1,
-    hivPos = Var2,
-    freq = Freq) %>%
-  group_by(sample) %>%
-  mutate(sample_total = sum(freq)) %>%
-  group_by(sample, hivPos) %>%
-  mutate(prop = freq / sample_total * 100) %>%
-  mutate(sample = as.character(sample)) %>%
-  mutate(hivPos = as.logical(hivPos)) %>%
-  filter(hivPos & sample != "B45") %>% 
-  left_join(salantesData) %>%
-  select(sample, hivPos, 5:8) %>%
-  mutate(total_dna = log10(total_dna)) %>%
-  mutate(rna = log10(rna)) %>%
-  mutate(iupm = log10(iupm)) %>%
-  pivot_longer(iupm:rna, names_to = "metric", values_to = "value") %>%
-  ggplot(aes(y = prop, x = value)) +
-  geom_point(aes(color = sample)) +
-  facet_wrap(~ metric, scales = "free_x") +
-  geom_smooth(method='lm', formula= y ~ x) +
-  stat_cor(label.y = 0.3, method = "spearman", cor.coef.name = "rho") +
-  theme_bw() +
-  theme(panel.grid = element_blank())
-
-
-tmp2 <- invitro_markerTest_activatedPeaks_topPeaks %>%
-  mutate(finder = gsub(",", "|", inGene)) %>%
-  mutate(finder = paste0("(", finder, ")")) %>%
-  mutate(finder2 = gsub(",", "|", nearestTSS)) %>%
-  mutate(finder2 = paste0("(", finder, ")"))
-
-
-tmp2$inGeneInteractHIV <- sapply(tmp2$finder, function(x) {
-  hit <- grepl(x, tmp$Human_GeneSymbol)
-  return(paste(tmp$Interaction_Desc[hit], collapse = " | "))
-  
-})
-  
-tmp2$nearestInteractHIV <- sapply(tmp2$finder2, function(x) {
-  hit <- grepl(x, tmp$Human_GeneSymbol)
-  return(paste(tmp$Interaction_Desc[hit], collapse = " | "))
-})
-
-
-# makeFancyUpsetPlotHIV(
-#   seu = adtART_matched,
-#   cellsOfInterest = names(art_tcells),
-#   featuresOfInterest = c("A0047", "A0576", "A0396", "A0575", "A0088"),
-#   featuresOfInterestNames = c("CD200 (OX2)", "CD49d", "CD26", "CD49a", "PD-1"),
-#   metadata = ifelse(art_tcells, "HIV+", "HIV-"),
-#   thresholds = c(1, 1.75, 2, 1, 1, 1.5),
-#   fn = "art_fancyUpset_tCells"
-# )
-
-# tmp <- calculateCoverage(inVitroFrags_matched, rep(0, 9726))
-# 
-# tmp2 <- calculateCoverage(inVitroFrags_matched %>%
-#     group_by(readname, newCbc) %>%
-#     filter(n() == 2) %>%
-#     arrange(min(startBp, endBp), .by_group = TRUE) %>%
-#     summarise(inferredStart = first(endBp) + 1, inferredEnd = last(startBp) -1) %>%
-#     as.data.frame(.),
-#   coverage = rep(0, 9726), startCol = "inferredStart", endCol = "inferredEnd")
-# 
-# tmp %>%
-#   mutate(y = y + tmp2$y) %>%
-#   filter(x < 800) %>%
-#   ggplot(aes(x = x, y=y)) +
-#   annotate("rect",
-#     xmin = c(40, 456-2), xmax = c(200, 456+140), ymin = 0, ymax = 0.3,
-#     alpha = .1, fill = "blue") +
-#   annotate("rect",
-#     xmin = c(315), xmax = c(408), ymin = 0, ymax = 0.3,
-#     alpha = .1, fill = "red") +
-#   geom_vline(xintercept = 456, color = "red") +
-#   geom_line() +
-#   theme_classic()
-
-
-# mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
-# tmpSapEnsembl <- tsa_catalog$Ensembl.ID[tsa_catalog$Ensembl.ID != ""]
-# names(tmpSapEnsembl) <- tsa_catalog[tsa_catalog$Ensembl.ID != "", "DNA_ID"]
-# 
-# results <- getBM(
-#   attributes = c("ensembl_gene_id", "go_id","name_1006"),
-#   filters = "ensembl_gene_id",
-#   values = tmpSapEnsembl,
-#   mart = mart)
-# 
-# ignoredGoTerms <- c(
-#   "integral component of plasma membrane",
-#   "membrane",
-#   "plasma membrane",
-#   "integral component of membrane",
-#   "external side of plasma membrane",
-#   ""
-# )
-# 
-# tmpCleanPrefix <- function(x) {
-#   return(gsub("(.+___)","",x))
-# }
-# 
-# art_markers %>%
-#   select(gene, cleanName, piScore, Status) %>%
-#   mutate(geneID = tmpSapEnsembl[gene]) %>%
-#   left_join(results, by = c("geneID" = "ensembl_gene_id")) %>%
-#   group_by(Status, name_1006) %>%
-#   tally() %>%
-#   filter(!name_1006 %in% ignoredGoTerms) %>%
-#   filter(n >= 2) %>%
-#   arrange(n, .by_group = TRUE) %>%
-#   mutate(xvar = paste0(Status, "___", name_1006)) %>%
-#   mutate(xvar = factor(xvar, levels = unique(xvar))) %>%
-#   slice_max(n, n = 20) %>%
-#   ggplot(aes(x = n, y = xvar, fill = Status)) +
-#   geom_col(color = "#000000") +
-#   theme(
-#     legend.position = "none",
-#     panel.background = element_blank(), 
-#     panel.grid.major.x = element_line(color = "#cccccc", linetype = "dotted"),
-#     axis.text.y = element_text(size = 8),
-#     axis.title = element_blank()) +
-#   scale_y_discrete(labels = tmpCleanPrefix) +
-#   scale_x_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
-#   scale_fill_manual(values = c(HIVNEGCOLOR, HIVPOSCOLOR)) +
-#   facet_grid(Status ~ ., scales = "free", space='free')
-  
-
+plotFragByAnnot(artAnnotDf, fn = "art_fragCoverage_byAnnot")
