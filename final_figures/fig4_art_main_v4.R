@@ -132,8 +132,10 @@ p <- figA +
   plot_layout(design = layout)
 
 # p <- patchworkGrob(p)
+# fix any strip text clipping issue
+
 p <- unclipStripText(p)
-saveRDS(p, "fig4.rds")
+# saveRDS(p, "fig4.rds")
 
 saveFinalFigure(plot = p, fn = "fig4_art", devices = c("png", "pdf"), gwidth = 8.25, gheight = 9)
 

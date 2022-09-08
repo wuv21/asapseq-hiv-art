@@ -53,13 +53,10 @@ unclipStripText <- function(g) {
   g2 <- patchworkGrob(g)
   for (i in which(grepl("strip-r", g2$layout$name))){
 
-    g2$grobs[[i]]$layout$clip <- "off"
-    g2$grobs[[i]]$layout$z <- Inf
-    
-    print(g2$grobs[[i]]$layout)
+    g2$grobs[[i]]$grobs[[1]]$layout$clip <- "off"
   }
   
-  return(g)
+  return(g2)
 }
 
 saveFinalFigure <- function(
