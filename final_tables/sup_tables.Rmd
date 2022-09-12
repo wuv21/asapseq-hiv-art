@@ -150,14 +150,37 @@ kbl(ivPeakListActivated, booktabs = T, align = "c", longtable = TRUE, linesep = 
 
 \pagebreak
 
-**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during treated infection.
+**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during chronic infection.
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTable("../outs/tsv/chronic_initClusterMarkers.tsv")
+```
+
+\pagebreak
+
+**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during chronic infection.
+```{r, echo=FALSE, message=FALSE}
+prepareDEMarkerTableCompiled(
+  fns = c(
+    "../outs/tsv/chronic_markers.tsv",
+    "../outs/tsv/chronic_tfh_markers.tsv"),
+  descriptors = c(
+    "CD4+",
+    "Tfh CD4+"
+  )
+)
+```
+
+\pagebreak
+
+
+**Supplemental Table 7:** Significant surface markers enriched in each cluster (over all other cells) during treated infection.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/art_initClusterMarkers.tsv")
 ```
 
 \pagebreak
 
-**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection.
+**Supplemental Table 8:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTableCompiled(
   fns = c(
@@ -177,7 +200,7 @@ prepareDEMarkerTableCompiled(
 
 \pagebreak
 
-**Supplemental Table 7:** Autologous virus sequences used in study.
+**Supplemental Table 9:** Autologous or consensus virus sequences used in study.
 ```{r, echo=FALSE, message=FALSE}
 viralSeqs <- read.csv("../viralFastas/infoForSupplemental.csv", sep = ",", check.names = FALSE)
 
