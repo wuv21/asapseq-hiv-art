@@ -129,4 +129,10 @@ p <- wrap_elements(full = figAB, ignore_tag = TRUE) +
   plot_annotation(tag_levels = list(c(letters[3:4], "g", "j"))) +
   plot_layout(design = layout)
 
-saveFinalFigure(plot = p, fn = "supfig_chronic_main", devices = c("png", "pdf"), gwidth = 8, gheight = 8)
+p2 <- patchworkGrob(p)
+
+# fix figure d text being blocked by figure e background
+p2$grobs[[29]]$grobs[[33]]$gp$fill <- "transparent"
+p2$grobs[[29]]$grobs[[33]]$gp$col <- NA
+
+saveFinalFigure(plot = p2, fn = "supfig_chronic_main", devices = c("png", "pdf"), gwidth = 8, gheight = 8)
