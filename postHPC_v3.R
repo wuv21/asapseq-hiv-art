@@ -448,8 +448,8 @@ exportTsv(invitro_activeLate_markers)
 
 invitro_activeLate_markers_forVln <- invitro_activeLate_markers %>%
   group_by(Status) %>%
-  arrange(desc(abs(piScore)), .by_group = TRUE) %>%
-  top_n(10, abs(piScore))
+  dplyr::arrange(dplyr::desc(abs(piScore)), .by_group = TRUE) %>%
+  slice_max(abs(piScore), n = 10)
 
 plotVlnEnhanced(adtInvitro_matched, cells = names(invitro_activeLaterCells),
   feats = invitro_activeLate_markers_forVln$gene,
