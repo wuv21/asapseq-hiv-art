@@ -132,6 +132,9 @@ getBasePanelAndMarkers <- function(
         plot.title = element_text(size = 8))
   })
   
+  
+  savePlot(plot = baseRidgePlotGrid, fn = paste0(plotFn, "_separate"), devices = "rds")
+  
   p <- do.call(cowplot::plot_grid, c(list(ncol = 5), baseRidgePlotGrid))
   savePlot(plot = p, fn = plotFn, devices = c("png", "rds"), gheight = 8, gwidth = 11)
 }

@@ -20,7 +20,7 @@ subplotTheme <- theme(
 
 supplementalLollipopTheme <- theme(
   plot.title.position = "plot",
-  plot.subtitle = element_text(size = 8, margin = margin(4,0,0,0), hjust = 0.5),
+  plot.subtitle = element_text(size = 7, margin = margin(4,0,0,0), hjust = 0.5),
   plot.margin = unit(c(0,0,0,0), "pt"),
   panel.background = element_rect(fill = "transparent", colour = NA),
   plot.background = element_rect(fill = "transparent", colour = NA),

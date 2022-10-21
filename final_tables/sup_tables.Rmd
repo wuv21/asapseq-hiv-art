@@ -94,14 +94,14 @@ prepareDEMarkerTableCompiled <- function(fns, descriptors, idCol = "Subset") {
 
 \pagebreak
 
-**Supplemental Table 2:** Significant surface markers enriched in each cluster (over all other cells) for *in vitro* model.
+**Supplemental Table 2:** Significant surface markers enriched in each cluster (over all other cells) for *in vitro* model. Significance calculated in Seurat using two-sided Wilcoxon test with multiple comparison adjustment using Bonferroni-Hochberg method.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/invitro_initClusterMarkers.tsv")
 ```
 
 \pagebreak
 
-**Supplemental Table 3:** Significant surface markers enriched in HIV+ versus HIV- cells for *in vitro* model.
+**Supplemental Table 3:** Significant surface markers enriched in HIV+ versus HIV- cells for *in vitro* model. Test performed using the DESeq2 pseudobulk method in Seurat (two-tailed with multiple comparison adjustment using Bonferroni-Hochberg method).
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTableCompiled(
   fns = c(
@@ -150,14 +150,14 @@ kbl(ivPeakListActivated, booktabs = T, align = "c", longtable = TRUE, linesep = 
 
 \pagebreak
 
-**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during chronic infection.
+**Supplemental Table 5:** Significant surface markers enriched in each cluster (over all other cells) during chronic infection. Significance calculated in Seurat using two-sided Wilcoxon test with multiple comparison adjustment using Bonferroni-Hochberg method.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/chronic_initClusterMarkers.tsv")
 ```
 
 \pagebreak
 
-**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during chronic infection.
+**Supplemental Table 6:** Significant surface markers enriched in HIV+ versus HIV- cells during chronic infection. Test performed using the DESeq2 pseudobulk method in Seurat (two-tailed with multiple comparison adjustment using Bonferroni-Hochberg method).
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTableCompiled(
   fns = c(
@@ -173,14 +173,14 @@ prepareDEMarkerTableCompiled(
 \pagebreak
 
 
-**Supplemental Table 7:** Significant surface markers enriched in each cluster (over all other cells) during treated infection.
+**Supplemental Table 7:** Significant surface markers enriched in each cluster (over all other cells) during treated infection. Significance calculated in Seurat using two-sided Wilcoxon test with multiple comparison adjustment using Bonferroni-Hochberg method.
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTable("../outs/tsv/art_initClusterMarkers.tsv")
 ```
 
 \pagebreak
 
-**Supplemental Table 8:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection.
+**Supplemental Table 8:** Significant surface markers enriched in HIV+ versus HIV- cells during treated infection. Test performed using the DESeq2 pseudobulk method in Seurat (two-tailed with multiple comparison adjustment using Bonferroni-Hochberg method).
 ```{r, echo=FALSE, message=FALSE}
 prepareDEMarkerTableCompiled(
   fns = c(

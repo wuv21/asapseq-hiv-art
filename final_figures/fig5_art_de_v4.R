@@ -10,10 +10,10 @@ figETxtRds <- readRDS("../outs/rds/artLess_markerTest_deviations_heatmapTxt.rds"
 figF <- readRDS("../outs/rds/art_chromVAR_tcmttm_motifsUp_HIVpos_enhanced.rds")
 
 titleTheme <- subplotTheme + theme(
-  plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
+  plot.title = element_text(size = 7, hjust = 0.5, margin = margin(b = 4)),
   axis.text = element_text(size = 6),
   strip.background = element_rect(fill = "transparent", colour = NA_character_),
-  strip.text = element_text(size = 8, color = "#000000"),
+  strip.text = element_text(size = 7, color = "#000000"),
   panel.background = element_rect(fill = "transparent", colour = NA_character_),
   plot.background = element_rect(fill = "transparent", colour = NA_character_),
   axis.title.y = element_blank(),
@@ -32,7 +32,7 @@ figF <- figF + subplotTheme +
     y = "-log10(FDR)") +
   theme(
     plot.subtitle = element_blank(),
-    plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
+    plot.title = element_text(size = 7, hjust = 0.5, margin = margin(b = 4)),
     axis.text = element_text(size = 6),
     axis.title.y = element_text(size = 6),
     legend.title = element_text(size = 6),
@@ -137,7 +137,7 @@ p <- figA +
 p <- unclipStripText(p)
 # saveRDS(p, "fig4.rds")
 
-saveFinalFigure(plot = p, fn = "fig4_art", devices = c("png", "pdf"), gwidth = 8.25, gheight = 9)
+saveFinalFigure(plot = p, fn = "fig5_art_de", devices = c("png", "pdf"), gwidth = 8.25, gheight = 9)
 
 # warnings()
 

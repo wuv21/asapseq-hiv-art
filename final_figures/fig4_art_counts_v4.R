@@ -1,4 +1,5 @@
 source("defaultFigureSettings.R")
+library(ggtext)
 
 figA <- readRDS("../outs/rds/art_umap_labeledCluster_withPlotLabels.rds")
 figB <- readRDS("../outs/rds/art_umap_haystackout.rds")
@@ -15,7 +16,7 @@ a_legend <- as_ggplot(get_legend(figA +
       legend.box.margin=margin(-10,-10,-10,-10),
       legend.justification = "left",
       legend.text = element_text(margin = margin(r = 12, unit = "pt"), size = 6),
-      legend.title = element_text(size = 8, color = "#000000", hjust = 0))))
+      legend.title = element_text(size = 7, color = "#000000", hjust = 0))))
 
 b_legend <- as_ggplot(get_legend(figB + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1, title = "Legend for (b)",
@@ -26,7 +27,7 @@ b_legend <- as_ggplot(get_legend(figB +
       legend.box.margin=margin(-10,-10,-10,-10),
       legend.justification = "left",
       legend.text = element_text(margin = margin(r = 12, unit = "pt"), size = 6),
-      legend.title = element_text(size = 8, color = "#000000"))))
+      legend.title = element_text(size = 7, color = "#000000"))))
 
 
 figABLegend <- a_legend / b_legend & subplotTheme 
@@ -57,7 +58,6 @@ figD <- figD + subplotTheme +
     axis.text.y = element_text(size = 5, angle = 45, hjust = 1),
     axis.title.y = element_blank(),
     panel.background = element_rect(colour = "black", fill = NA, size = 1)
-    # axis.line = element_line(colour = "black", size = rel(1))
   )
 
 layout <- c(
@@ -69,7 +69,7 @@ layout <- c(
 
 discreteLollipopTheme <- subplotTheme + theme(
   axis.title.y = element_blank(),
-  axis.title.x = element_blank(),
+  axis.title.x = element_markdown(margin = margin(t = 2.5)),
   axis.text.x = element_text(size = 6),
   plot.subtitle = element_text(size = 7, hjust = 0.5, margin = margin(b = -1)),
   plot.title.position = "panel",
@@ -86,8 +86,17 @@ decreasePointAndText <- function(x) {
 figC <- lapply(figC, decreasePointAndText)
 for (i in c(2:length(figC))) {
   figC[[i]] <- figC[[i]] + theme(axis.text.y = element_blank())
+  
+  if (i == 4) {
+    figC[[i]] <- figC[[i]] +
+      labs(x = "<span style='font-size:7pt'>Number of cells (<span style='color:#999999;'>HIV-</span> | <span style='color:#e63946;'>HIV+</span>)</span>")
+  } else {
+    figC[[i]] <- figC[[i]] + labs(x = "")
+  }
 }
-figC[[1]] <- figC[[1]] + theme(axis.text.y = element_text(angle = 45, hjust = 1, size = 5))
+figC[[1]] <- figC[[1]] + 
+  labs(x = "") +
+  theme(axis.text.y = element_text(angle = 45, hjust = 1, size = 5))
 
 figC <- wrap_plots(figC, nrow = 1) &
   (list(
@@ -103,5 +112,5 @@ p <- wrap_elements(full = figAB, ignore_tag = TRUE) +
   plot_annotation(tag_levels = list(c("c", "d"))) +
   plot_layout(design = layout)
 
-saveFinalFigure(plot = p, fn = "fig3_art", devices = c("png", "pdf"), gwidth = 8.2, gheight = 9)
+saveFinalFigure(plot = p, fn = "fig4_art_count", devices = c("png", "pdf"), gwidth = 8.2, gheight = 9)
 

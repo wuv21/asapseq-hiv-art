@@ -1,4 +1,5 @@
 source("defaultFigureSettings.R")
+library(ggtext)
 
 figA <- readRDS("../outs/rds/InVitro_umap_labeledCluster_withPlotLabels.rds")
 figB <- readRDS("../outs/rds/invitro_umap_haystackout.rds")
@@ -15,7 +16,7 @@ a_legend <- as_ggplot(get_legend(figA +
       legend.box.margin=margin(-10,-10,-10,-10),
       legend.justification = "left",
       legend.text = element_text(margin = margin(r = 12, unit = "pt")),
-      legend.title = element_text(size = 8, color = "#000000"))))
+      legend.title = element_text(size = 7, color = "#000000"))))
 
 b_legend <- as_ggplot(get_legend(figB + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1,
@@ -27,7 +28,7 @@ b_legend <- as_ggplot(get_legend(figB +
       legend.box.margin=margin(-10,-10,-10,-10),
       legend.justification = "left",
       legend.text = element_text(margin = margin(r = 12, unit = "pt")),
-      legend.title = element_text(size = 8, color = "#000000"))))
+      legend.title = element_text(size = 7, color = "#000000"))))
 
 figA <- figA + umapPlotThemeNoLeg +
   subplotTheme +
@@ -42,12 +43,22 @@ figB <- figB + umapPlotThemeNoLeg +
 figAB <- figA + figB + plot_annotation(tag_levels = "a")
 figAB[[2]] <- figAB[[2]] + plot_layout(tag_level = "keep")
 
+figC <- figC +
+  labs(x = "<span style='font-size:7pt'>Number of cells (<span style='color:#999999;'>HIV-</span> | <span style='color:#e63946;'>HIV+</span>)</span>") +
+  subplotTheme +
+  theme(axis.title.x = element_markdown())
+
+figD <- figD +
+  labs(x = "<span style='font-size:7pt'>Proportion of <span style='color:#e63946;'>HIV+</span> cells</span>") +
+  subplotTheme +
+  theme(axis.title.x = element_markdown())
+
 figE <- figE +
   subplotTheme + theme(
-    plot.title = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
+    plot.title = element_text(size = 7, hjust = 0.5, margin = margin(b = 4)),
     axis.text = element_text(size = 6),
     strip.background = element_rect(fill = "transparent", colour = NA_character_),
-    strip.text = element_text(size = 8, color = "#000000"),
+    strip.text = element_text(size = 7, color = "#000000"),
     panel.background = element_rect(fill = "transparent", colour = NA_character_),
     plot.background = element_rect(fill = "transparent", colour = NA_character_),
     axis.title.y = element_blank(),
@@ -74,8 +85,8 @@ layout <- c(
 
 p <- wrap_elements(full = figAB, ignore_tag = TRUE) +
   wrap_elements(figABLegend, ignore_tag = TRUE) + 
-  wrap_elements(figC + subplotTheme) +
-  wrap_elements(figD + subplotTheme + theme(plot.margin = unit(c(0, 0, 0, 10), "pt"))) +
+  wrap_elements(figC) +
+  wrap_elements(figD + theme(plot.margin = unit(c(0, 0, 0, 10), "pt"))) +
   wrap_elements(figE) +
   plot_annotation(tag_levels = list(c(letters[3:5]))) +
   plot_layout(design = layout)

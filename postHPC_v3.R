@@ -194,7 +194,7 @@ artPreProcessed <- loadProcessedProj(
     "resolution" = 0.6
   ),
   filterProp = NA,
-  runPreAnnot = FALSE,
+  runPreAnnot = TRUE,
   force = FALSE,
   runPreAnnotIsoComps = isoComparisonsART,
   prefixForGraphs = "art"
@@ -645,6 +645,18 @@ for (tmp in iv_genesOfInterest) {
     fn = paste0("invitro_activated_", tmp))
 } 
 
+
+makeFancyUpsetPlotHIV(
+  seu = adtInvitro_matched,
+  cellsOfInterest = names(invitro_activeLaterCells),
+  featuresOfInterest = c("A0141", "A0870", "A0367", "A0147", "A0390"),
+  featuresOfInterestNames = c("CCR5", "SLAM", "CD2", "CD62L", "CD127"),
+  metadata = ifelse(invitro_activeLaterCells, "HIV+", "HIV-"),
+  thresholds = c(1.25, 1.25, 1.25, 2.75, 1.5),
+  fn = "invitro_fancyUpset_activatedLaterCells"
+)
+
+
 ###############################################################################
 # iv model analysis
 ###############################################################################
@@ -758,7 +770,7 @@ plotLogitRegressionVolcano(invitroLR, tsa_catalog, invitroAdtToUse, "invitro_log
 
 randomForest::importance(invitroRF$`RF (all)`, type = "1") %>% 
   as.data.frame(.) %>% 
-  arrange(desc(MeanDecreaseAccuracy)) %>%
+  dplyr::arrange(desc(MeanDecreaseAccuracy)) %>%
   mutate(DNA_ID = rownames(.)) %>%
   left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID") %>%
   head(n = 10)
@@ -794,7 +806,7 @@ plotGgRoc(invitroActModelsROC, invitroActModelsAUC,"invitro_models_activated")
 
 randomForest::importance(invitroActRF$`RF (all)`, type = "1") %>% 
   as.data.frame(.) %>% 
-  arrange(desc(MeanDecreaseAccuracy)) %>%
+  dplyr::arrange(desc(MeanDecreaseAccuracy)) %>%
   mutate(DNA_ID = rownames(.)) %>%
   left_join(tsa_catalog %>% select(DNA_ID, cleanName), by = "DNA_ID") %>%
   head(n = 10)
@@ -1099,7 +1111,7 @@ if (!dir.exists(artLessGcPeakFn)) {
 ##############
 ### Checkpoint
 ##############
-save.image(paste(format(Sys.time(), "%Y-%m-%d-%H-%M-rebuttal"), "RData", sep = "."))
+save.image(paste(format(Sys.time(), "%Y-%m-%d-%H-%M-rebuttal_final"), "RData", sep = "."))
 
 
 artLess_markerTest_deviations <- getMarkerFeatures(
@@ -1268,16 +1280,16 @@ art_tem_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
 makeDifferentialLollipop2(art_tem_markers, "art_tem_markers")
 exportTsv(art_tem_markers)
 
-# art_mait_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
-#   identPos = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "MAIT_TRUE"]),
-#   identNeg = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "MAIT_FALSE"]),
-#   featuresToUse = ARTAdtToUse,
-#   findMarkerMethod = "wilcox",
-#   logfc.threshold = 0.1,
-#   tsa_catalog = tsa_catalog)
-# 
-# makeDifferentialLollipop(art_mait_markers, "art_mait_markers")
-# exportTsv(art_mait_markers)
+art_mait_markers <- findHIVDifferentialMarkers(seu = adtART_matched,
+  identPos = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "MAIT_TRUE"]),
+  identNeg = names(adtART_matched$lessCondensedHivClust[adtART_matched$lessCondensedHivClust == "MAIT_FALSE"]),
+  featuresToUse = ARTAdtToUse,
+  findMarkerMethod = "wilcox",
+  logfc.threshold = 0.1,
+  tsa_catalog = tsa_catalog)
+
+makeDifferentialLollipop2(art_mait_markers, "art_mait_markers")
+exportTsv(art_mait_markers)
 
 ###############################################################################
 # qc and frags

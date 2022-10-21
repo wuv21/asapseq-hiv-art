@@ -1,4 +1,5 @@
 source("defaultFigureSettings.R")
+library(ggtext)
 
 figA <- readRDS("../outs/rds/chronic_umap_labeledCluster_withPlotLabels.rds")
 figB <- readRDS("../outs/rds/chronic_umap_haystackout.rds")
@@ -17,7 +18,7 @@ a_legend <- as_ggplot(get_legend(figA +
     theme(legend.margin=margin(0,0,0,0),
       legend.box.margin=margin(-10,-10,-10,-10),
       legend.justification = "left",
-      legend.title = element_text(size = 8, color = "#000000"))))
+      legend.title = element_text(size = 7, color = "#000000"))))
 
 b_legend <- as_ggplot(get_legend(figB + 
     guides(colour = guide_legend(override.aes = list(size = 4, alpha = 1), ncol = 1, title = "Legend\nfor (b)")) +
@@ -25,7 +26,7 @@ b_legend <- as_ggplot(get_legend(figB +
       legend.margin=margin(0,0,0,0),
       legend.box.margin=margin(-10,-10,-10,-10),
       legend.justification = "left",
-      legend.title = element_text(size = 8, color = "#000000"))))
+      legend.title = element_text(size = 7, color = "#000000"))))
 
 figA <- figA + umapPlotThemeNoLeg +
   subplotTheme
@@ -41,17 +42,26 @@ figAB[[2]] <- figAB[[2]] + plot_layout(tag_level = "keep")
 figABLegend <- a_legend / b_legend & subplotTheme &
   theme(plot.margin = unit(c(0, 10, 0, 0), "pt"))
 
-figD <- figD + 
-  subplotTheme + 
-  theme(plot.margin = margin(0,10,0,0, "pt"),
+
+figC <- figC +
+  labs(x = "<span style='font-size:7pt'>Number of cells (<span style='color:#999999;'>HIV-</span> | <span style='color:#e63946;'>HIV+</span>)</span>") +
+  subplotTheme +
+  theme(axis.title.x = element_markdown())
+
+figD <- figD +
+  labs(x = "<span style='font-size:7pt'>Proportion of <span style='color:#e63946;'>HIV+</span> cells</span>") +
+  subplotTheme +
+  scale_x_continuous(expand = expansion(mult = c(0.1, 0.3))) +
+  theme(axis.title.x = element_markdown(),
+    plot.margin = margin(0,10,0,0, "pt"),
     axis.title.y = element_blank())
 
 titleTheme <- subplotTheme + theme(
-  plot.subtitle = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
+  plot.subtitle = element_text(size = 7, hjust = 0.5, margin = margin(b = 4)),
   plot.title.position = "panel",
   axis.text = element_text(size = 6),
   strip.background = element_rect(fill = "transparent", colour = NA_character_),
-  strip.text = element_text(size = 8, color = "#000000"),
+  strip.text = element_text(size = 7, color = "#000000"),
   panel.background = element_rect(fill = "transparent", colour = NA_character_),
   plot.background = element_rect(fill = "transparent", colour = NA_character_),
   axis.title.y = element_blank(),
@@ -78,7 +88,7 @@ motifTheme <- subplotTheme + theme(
   legend.key.size = unit(0.5, 'line'),
   legend.key.height = unit(0.4, 'line'),
   legend.box.margin = margin(r = -5),
-  plot.subtitle = element_text(size = 8, hjust = 0.5, margin = margin(b = 4)),
+  plot.subtitle = element_text(size = 7, hjust = 0.5, margin = margin(b = 4)),
   plot.title = element_text(size = 12, margin = margin(0, 0, 5, 0)))
 
 
@@ -120,7 +130,7 @@ layout <- c(
 
 p <- wrap_elements(full = figAB, ignore_tag = TRUE) +
   wrap_elements(figABLegend, ignore_tag = TRUE) +
-  wrap_elements(figC + subplotTheme) +
+  wrap_elements(figC) +
   wrap_elements(figD) +
   wrap_elements(full = figEF, ignore_tag = TRUE) +
   wrap_elements(figG) +
@@ -129,10 +139,10 @@ p <- wrap_elements(full = figAB, ignore_tag = TRUE) +
   plot_annotation(tag_levels = list(c(letters[3:4], "g", "j"))) +
   plot_layout(design = layout)
 
-p2 <- patchworkGrob(p)
+# p2 <- patchworkGrob(p)
+# 
+# # fix figure d text being blocked by figure e background
+# p2$grobs[[29]]$grobs[[33]]$gp$fill <- "transparent"
+# p2$grobs[[29]]$grobs[[33]]$gp$col <- NA
 
-# fix figure d text being blocked by figure e background
-p2$grobs[[29]]$grobs[[33]]$gp$fill <- "transparent"
-p2$grobs[[29]]$grobs[[33]]$gp$col <- NA
-
-saveFinalFigure(plot = p2, fn = "supfig_chronic_main", devices = c("png", "pdf"), gwidth = 8, gheight = 8)
+saveFinalFigure(plot = p, fn = "fig3_chronic_main", devices = c("png", "pdf"), gwidth = 8, gheight = 8)

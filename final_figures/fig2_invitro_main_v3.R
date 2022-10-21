@@ -1,4 +1,5 @@
 source("defaultFigureSettings.R")
+library(ggtext)
 
 figVolcano <- readRDS("../outs/rds/invitro_peaks_volcano_activatedHIV.rds")
 
@@ -36,13 +37,18 @@ rocTheme <- theme(
 
 figCCR5[[1]] <- figCCR5[[1]] + 
   subplotTheme +
-  ggtitle(" ") +
+  labs(title = "<span style='font-size:7pt'> 
+    <span style='color:#999999;'>HIV-</span> | 
+    <span style='color:#e63946;'>HIV+</span> | Gene (<span style='color:#FFA500;'>positive</span> vs <span style='color:#0000FF;'>negative</span> orientation)
+    </span>") +
   theme(
+    plot.title = element_markdown(),
+    plot.title.position = "panel",
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank())
 
-figCCR5[[2]] <- figCCR5[[2]] + theme(plot.title = element_blank()) + ggtitle("")
-figCCR5 <- wrap_plots(figCCR5, ncol = 1, heights = c(3,2,1)) & subplotTheme
+figCCR5[[2]] <- figCCR5[[2]] + subplotTheme + theme(plot.title = element_blank())
+figCCR5 <- wrap_plots(figCCR5, ncol = 1, heights = c(3,2,1))
 
 figTopPeaks <- figTopPeaks + 
   subplotTheme + 
@@ -54,8 +60,16 @@ figTopPeaks <- figTopPeaks +
     legend.box.margin=margin(0,0,0,0),
     plot.margin = margin(0,0,10,0))
 
+motifTheme <- theme(
+  plot.subtitle = element_text(size = 7, hjust = 0.5, margin = margin(0,0,1,0)),
+  plot.title.position = "panel"
+)
+
+figMotifDown <- figMotifDown + labs(subtitle = "HIV-") + motifTheme
+figMotifUp <- figMotifUp + labs(subtitle = "HIV+") + motifTheme
+  
 figMotifs <- figMotifDown + (figMotifUp + theme(axis.title.y = element_text(color = "#FFFFFF00"))) &
-    subplotTheme + theme(plot.margin = margin(0, 0, 0, 0))
+    subplotTheme + theme(plot.title.position = "panel", plot.margin = margin(0, 0, 0, 0))
 
 layout <- c(
   area(1, 1, 3, 2), #volcano
@@ -71,7 +85,7 @@ layout <- c(
 p <- wrap_elements(panel = figVolcano + subplotTheme +
     theme(legend.margin=margin(0,0,20,0), legend.box.margin=margin(-5,-10,0,-10))) +
   wrap_elements(figTopPeaks + theme(plot.margin = margin(t = -10), strip.text = element_text(size = 8))) +
-  wrap_elements(figCCR5 & theme(plot.title = element_blank(), plot.margin = margin(t = -20))) +
+  wrap_elements(figCCR5 & theme(plot.margin = margin(t = -20))) +
   wrap_elements(figMotifs) +
   wrap_elements(full = figModel + subplotTheme + rocTheme + theme(plot.margin = unit(c(0,0,0,-10), "pt"))) +
   wrap_elements(panel = figROCVolcano) +
