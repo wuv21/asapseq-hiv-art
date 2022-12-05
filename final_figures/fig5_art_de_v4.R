@@ -23,7 +23,7 @@ titleTheme <- subplotTheme + theme(
 figA <- figA + labs(title = "All T cells (DESeq2)") + titleTheme
 figB <- figB + labs(title = "All T cells (Wilcoxon)") + titleTheme
 figC <- figC + labs(title = "Tcm/Ttm (DESeq2)") + titleTheme 
-figD <- figD + labs(title = "Tem (DESeq2)") + titleTheme
+figD <- figD + labs(title = "Tem/effector (DESeq2)") + titleTheme
 
 figF <- figF + subplotTheme +
   labs(

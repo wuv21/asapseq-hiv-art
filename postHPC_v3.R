@@ -42,7 +42,7 @@ assignInNamespace(".testMarkerSC", .testMarkerSCCustom, ns = "ArchR")
 ###############################################################################
 # analysis settings
 ###############################################################################
-addArchRThreads(threads = 3) # can adjust if more RAM is available (higher threads require more)
+addArchRThreads(threads = 5) # can adjust if more RAM is available (higher threads require more)
 set.seed(21) # for reproducibility
 
 ###############################################################################
@@ -388,7 +388,7 @@ tmp <- tmp %>%
 
 tmp <- tmp %>%
   separate(donor, into = c("individual", "stage"), sep = "_", remove = FALSE) %>%
-  mutate(ifelse(is.na(stage), "N/A", stage)) %>%
+  mutate(stage = ifelse(is.na(stage), "N/A", stage)) %>%
   mutate(stage = factor(stage, levels = c("pre", "post", "N/A"), labels = c("Pre", "Post", "N/A"))) %>%
   mutate(individual = factor(individual, levels = c("A01", "A08", "A09", "B45", "Aggregate"))) %>%
   ungroup() %>%
@@ -1058,7 +1058,8 @@ artTestingDf <- data.frame(
     !grepl("^CD4", manual) ~ "Other",
     grepl("MAIT", manual) ~ "MAIT",
     grepl("(Tcm|cTfh)", manual) ~ "Tcm/Ttm",
-    TRUE ~ "Tem/effector"
+    grepl("(Tem)", manual) ~ "Tem/effector",
+    TRUE ~ "Tother"
   )) %>%
   mutate(lessCondensedHivClust = paste(lessCondensed, haystackOut, sep = "_"))
 
@@ -1070,9 +1071,10 @@ projART_matched <- addCellColData(ArchRProj = projART_matched,
 
 rm(artTestingDf)
 
-artLessGcPeakFn <- paste0(getOutputDirectory(projART_matched), "_lessCondensed_gcPeakCalled")
+artLessGcPeakFn <- paste0(getOutputDirectory(projART_matched), "_lessCondensed_gcPeakCalled2")
 if (!dir.exists(artLessGcPeakFn)) {
   projART_matchedLess_subset <- projART_matched[!grepl("(Other)", projART_matched$lessCondensedHivClust), ]
+  projART_matchedLess_subset <- projART_matchedLess_subset[!grepl("(Tother)", projART_matchedLess_subset$lessCondensedHivClust), ]
   
   projART_matchedLess_subset <- addGroupCoverages(
     ArchRProj = projART_matchedLess_subset,
@@ -1207,19 +1209,19 @@ tmp <- ComplexHeatmap::Heatmap(
 )
 
 
-artLess_markerTest_tem_deviations <- getMarkerFeatures(
-  ArchRProj = projART_matchedLess_subset_gcPeak, 
-  useMatrix = "MotifMatrix",
-  useGroups = "Tem/effector_TRUE",
-  bgdGroups = "Tem/effector_FALSE",
-  closest = FALSE,
-  groupBy = "lessCondensedHivClust",
-  bias = c("TSSEnrichment", "log10(nFrags)"),
-  verbose = FALSE,
-  useSeqnames = "z",
-)
-plotMotifDot(artLess_markerTest_tem_deviations, "art_chromVAR_temEffector_motifsUp_HIVneg", direction = "negative", pValMax = 0.05, showTopNByPVal = 10)
-plotMotifDot(artLess_markerTest_tem_deviations, "art_chromVAR_temEffector_motifsUp_HIVpos", direction = "positive", pValMax = 0.05, showTopNByPVal = 10)
+# artLess_markerTest_tem_deviations <- getMarkerFeatures(
+#   ArchRProj = projART_matchedLess_subset_gcPeak, 
+#   useMatrix = "MotifMatrix",
+#   useGroups = "Tem/effector_TRUE",
+#   bgdGroups = "Tem/effector_FALSE",
+#   closest = FALSE,
+#   groupBy = "lessCondensedHivClust",
+#   bias = c("TSSEnrichment", "log10(nFrags)"),
+#   verbose = FALSE,
+#   useSeqnames = "z",
+# )
+# plotMotifDot(artLess_markerTest_tem_deviations, "art_chromVAR_temEffector_motifsUp_HIVneg", direction = "negative", pValMax = 0.05, showTopNByPVal = 10)
+# plotMotifDot(artLess_markerTest_tem_deviations, "art_chromVAR_temEffector_motifsUp_HIVpos", direction = "positive", pValMax = 0.05, showTopNByPVal = 10)
 
 artLess_markerTest_tcmttm_deviations <- getMarkerFeatures(
   ArchRProj = projART_matchedLess_subset_gcPeak, 
